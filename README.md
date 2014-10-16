@@ -1,7 +1,7 @@
 pgzip
 =====
 
-Go parallel gzip compression. This is a drop in replacement for "compress/gzip".
+Go parallel gzip compression. This is a fully gzip compatible drop in replacement for "compress/gzip".
 
 This will split compression into blocks that are compressed in parallel. This can be useful for compressing big amounts of data.
 
