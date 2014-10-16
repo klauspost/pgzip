@@ -54,6 +54,14 @@ type result struct {
 	notifyWritten chan struct{}
 }
 
+// Use SetConcurrency to finetune the concurrency level if needed.
+//
+// With this you can control the approximate size of your blocks,
+// as well as how many you want to be processing in parallel.
+//
+// Default values for this is SetConcurrency(250000, 16),
+// meaning blocks are split at 250000 bytes and up to 16 blocks
+// can be processing at once before the writer blocks.
 func (z *Writer) SetConcurrency(blockSize, blocks int) error {
 	if blockSize <= tailSize {
 		return fmt.Errorf("gzip: block size cannot be less than or equal to %d", tailSize)
