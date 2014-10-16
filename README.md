@@ -9,6 +9,11 @@ The gzip decompression has not been modified, but remains in the package, so you
 
 A variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to gzip.
 
+[![GoDoc][1]][2]
+
+[1]: https://godoc.org/github.com/klauspost/pgzip?status.svg
+[2]: https://godoc.org/github.com/klauspost/pgzip
+
 
 Installation
 ====
