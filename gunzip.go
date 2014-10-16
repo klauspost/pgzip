@@ -2,8 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package gzip implements reading and writing of gzip format compressed files,
+// Package pgzip implements reading and writing of gzip format compressed files,
 // as specified in RFC 1952.
+//
+// This is a drop in replacement for "compress/gzip".
+// This will split compression into blocks that are compressed in parallel.
+// This can be useful for compressing big amounts of data.
+// The gzip decompression has not been modified, but remains in the package,
+// so you can use it as a complete replacement for "compress/gzip".
+//
+// See more at https://github.com/klauspost/pgzip
 package pgzip
 
 import (
