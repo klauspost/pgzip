@@ -7,9 +7,9 @@ This will split compression into blocks that are compressed in parallel. This ca
 
 The gzip decompression has not been modified, but remains in the package, so you can use it as a complete replacement for "compress/gzip".
 
-You should only use this if you are compressing big amounts of data, say more than 1MB at the time, otherwise you will not see any benefit.
+You should only use this if you are compressing big amounts of data, say **more than 1MB** at the time, otherwise you will not see any benefit, and it will likely be faster to use the internal gzip library.
 
-A variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to gzip.
+A golang variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
 
 [![GoDoc][1]][2] [![Build Status][3]][4]
 
