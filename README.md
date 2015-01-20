@@ -1,13 +1,15 @@
 pgzip
 =====
 
-Go parallel gzip compression. This is a drop in replacement for "compress/gzip".
+Go parallel gzip compression. This is a fully gzip compatible drop in replacement for "compress/gzip".
 
 This will split compression into blocks that are compressed in parallel. This can be useful for compressing big amounts of data.
 
 The gzip decompression has not been modified, but remains in the package, so you can use it as a complete replacement for "compress/gzip".
 
-A variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to gzip.
+You should only use this if you are compressing big amounts of data, say **more than 1MB** at the time, otherwise you will not see any benefit, and it will likely be faster to use the internal gzip library.
+
+A golang variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
 
 [![GoDoc][1]][2] [![Build Status][3]][4]
 
