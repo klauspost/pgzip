@@ -41,7 +41,7 @@ type Writer struct {
 	currentBuffer []byte
 	prevTail      []byte
 	digest        hash.Hash32
-	size          uint32
+	size          int
 	closed        bool
 	buf           [10]byte
 	err           error
@@ -331,7 +331,7 @@ func (z *Writer) Write(p []byte) (int, error) {
 		}()
 		z.currentBuffer = make([]byte, 0, z.blockSize+(z.blockSize/4))
 	}
-	z.size += uint32(len(p))
+	z.size += len(p)
 	z.digest.Write(p)
 	z.currentBuffer = append(z.currentBuffer, p...)
 	if len(z.currentBuffer) >= z.blockSize {
@@ -408,6 +408,12 @@ func (z *Writer) Flush() error {
 	return nil
 }
 
+// UncompressedSize will return the number of bytes written.
+// pgzip only, not a function in the official gzip package.
+func (z Writer) UncompressedSize() int {
+	return z.size
+}
+
 // Close closes the Writer, flushing any unwritten data to the underlying
 // io.Writer, but does not close the underlying io.Writer.
 func (z *Writer) Close() error {
@@ -431,7 +437,7 @@ func (z *Writer) Close() error {
 	}
 	close(z.results)
 	put4(z.buf[0:4], z.digest.Sum32())
-	put4(z.buf[4:8], z.size)
+	put4(z.buf[4:8], uint32(z.size))
 	_, z.err = z.w.Write(z.buf[0:8])
 	return z.err
 }

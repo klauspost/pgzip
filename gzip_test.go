@@ -288,7 +288,15 @@ func testBigGzip(i int, t *testing.T) {
 	var buf bytes.Buffer
 	w, _ := NewWriterLevel(&buf, 6)
 	io.Copy(w, br)
+	// Test UncompressedSize()
+	if len(testbuf) != w.UncompressedSize() {
+		t.Errorf("uncompressed size does not match. buffer:%d, UncompressedSize():%d", len(testbuf), w.UncompressedSize())
+	}
 	w.Close()
+	// Close should not affect the number
+	if len(testbuf) != w.UncompressedSize() {
+		t.Errorf("uncompressed size does not match. buffer:%d, UncompressedSize():%d", len(testbuf), w.UncompressedSize())
+	}
 	/*	fo, err := os.Create(fmt.Sprintf("output.%d.gz", i))
 		_, _ = fo.Write(buf.Bytes())
 		fo.Close()
