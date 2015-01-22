@@ -67,7 +67,7 @@ func (z *Writer) SetConcurrency(blockSize, blocks int) error {
 		return fmt.Errorf("gzip: block size cannot be less than or equal to %d", tailSize)
 	}
 	if blocks <= 0 {
-		return fmt.Errorf("gzip: blocks cannot be zero or less")
+		return errors.New("gzip: blocks cannot be zero or less")
 	}
 	z.blockSize = blockSize
 	z.results = make(chan result, blocks)
@@ -322,7 +322,7 @@ func (z *Writer) Write(p []byte) (int, error) {
 					return
 				}
 				if n != len(buf) {
-					z.pushError(fmt.Errorf("gzip: short write % should be %d", n, len(buf)))
+					z.pushError(fmt.Errorf("gzip: short write %d should be %d", n, len(buf)))
 					close(r.notifyWritten)
 					return
 				}
