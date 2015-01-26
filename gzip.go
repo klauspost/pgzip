@@ -252,7 +252,12 @@ func (z *Writer) checkError() error {
 }
 
 // Write writes a compressed form of p to the underlying io.Writer. The
-// compressed bytes are not necessarily flushed until the Writer is closed.
+// compressed bytes are not necessarily flushed to output until
+// the Writer is closed or Flush() is called.
+//
+// The function will return quickly, if there are unused buffers.
+// The sent slice (p) is copied, and the caller is free to re-use the buffer
+// when the function returns.
 func (z *Writer) Write(p []byte) (int, error) {
 	if z.checkError() != nil {
 		return 0, z.err
