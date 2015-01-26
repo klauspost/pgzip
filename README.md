@@ -24,8 +24,13 @@ Installation
 
 Usage
 ====
+[Godoc Doumentation](https://godoc.org/github.com/klauspost/pgzip)
 
-To use as a replacement for gzip, exchange import ```compress/gzip``` with ```import gzip github.com/klauspost/pgzip```. The API should be compatible.
+To use as a replacement for gzip, exchange 
+
+```import "compress/gzip"``` 
+with 
+```import gzip "github.com/klauspost/pgzip"```.
 
 To change the block size, use the added (*pgzip.Writer).SetConcurrency(blockSize, blocks int) function. With this you can control the approximate size of your blocks, as well as how many you want to be processing in parallel. Default values for this is SetConcurrency(250000, 16), meaning blocks are split at 250000 bytes and up to 16 blocks can be processing at once before the writer blocks.
 
