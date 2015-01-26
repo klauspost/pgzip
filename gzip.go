@@ -107,6 +107,9 @@ func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
 	return z, nil
 }
 
+// This function must be used by goroutines to set an
+// error condition, since z.err access is restricted
+// to the callers goruotine.
 func (z Writer) pushError(err error) {
 	z.pushedErr <- err
 	close(z.pushedErr)
@@ -238,6 +241,8 @@ func (z *Writer) compressCurrent(flush bool) {
 	}
 }
 
+// Returns an error if it has been set.
+// Cannot be used by functions that are from internal goroutines.
 func (z *Writer) checkError() error {
 	if z.err != nil {
 		return z.err
@@ -258,6 +263,11 @@ func (z *Writer) checkError() error {
 // The function will return quickly, if there are unused buffers.
 // The sent slice (p) is copied, and the caller is free to re-use the buffer
 // when the function returns.
+//
+// Errors that occur during compression will be reported later, and a nil error
+// does not signify that the compression succeeded (since it is most likely still running)
+// That means that the call that returns an error may not be the call that caused it.
+// Only Flush and Close functions are guaranteed to return any errors up to that point.
 func (z *Writer) Write(p []byte) (int, error) {
 	if z.checkError() != nil {
 		return 0, z.err
