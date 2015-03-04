@@ -58,8 +58,8 @@ Example with GOMAXPROC set to 4 (dual core with 2 hyperthreads)
 
 Compressor  | MB/sec   | speedup | size | size overhead
 ------------|----------|---------|------|---------
-gzip (golang) | 15.082MB/s | 1.0x | 6.405.193 | 0%
-pgzip (golang) | 26.736MB/s|1.8x | 6.421.585 | 0.2%
-bgzf (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
+[gzip](http://golang.org/pkg/encoding/json/) (golang) | 15.082MB/s | 1.0x | 6.405.193 | 0%
+[pgzip](https://github.com/klauspost/pgzip) (golang) | 26.736MB/s|1.8x | 6.421.585 | 0.2%
+[bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf) (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
 
 
