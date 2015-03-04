@@ -3,9 +3,9 @@ pgzip
 
 Go parallel gzip compression. This is a fully gzip compatible drop in replacement for "compress/gzip".
 
-This will split compression into blocks that are compressed in parallel. This can be useful for compressing big amounts of data.
+This will split compression into blocks that are compressed in parallel. This can be useful for compressing big amounts of data. The output is a standard gzip file.
 
-The gzip decompression has not been modified, but remains in the package, so you can use it as a complete replacement for "compress/gzip".
+The gzip decompression has not been modified, but remains in the package, so you can use it as a complete replacement for "compress/gzip". Decompression speed is the same as the standard gzip package.
 
 You should only use this if you are compressing big amounts of data, say **more than 1MB** at the time, otherwise you will not see any benefit, and it will likely be faster to use the internal gzip library.
 
