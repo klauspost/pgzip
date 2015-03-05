@@ -77,6 +77,7 @@ Compressor  | MB/sec   | speedup | size | size overhead
 The decompression speedup is there because it allows you to do other work while the decompression is taking place.
 
 In the example above, the numbers are as follows on a 4 CPU machine:
+
 Decompressor | Time | Speedup
 -------------|------|--------
 [gzip](http://golang.org/pkg/encoding/json/) (golang) | 1m28.85s | 0%
