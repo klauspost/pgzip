@@ -9,6 +9,8 @@ The gzip decompression is modified so it decompresses ahead of the current reade
 
 You should only use this if you are (de)compressing big amounts of data, say **more than 1MB** at the time, otherwise you will not see any benefit, and it will likely be faster to use the internal gzip library.
 
+It is important to note that this library creates and reads *standard gzip files*. You do not have to match the compressor/decompressor to get the described speedups, and the gzip files are fully compatible with other gzip readers/writers.
+
 A golang variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
 
 [![GoDoc][1]][2] [![Build Status][3]][4]
