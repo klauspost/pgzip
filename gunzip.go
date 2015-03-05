@@ -21,6 +21,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"sync"
 	"time"
 )
 
@@ -82,6 +83,13 @@ type Reader struct {
 	flg          byte
 	buf          [512]byte
 	err          error
+
+	readAhead   chan interface{}
+	current     []byte
+	closeReader chan struct{}
+	lastBlock   bool
+	blockSize   int
+	blocks      int
 }
 
 // NewReader creates a new Reader reading the given reader.
@@ -89,6 +97,30 @@ type Reader struct {
 // It is the caller's responsibility to call Close on the Reader when done.
 func NewReader(r io.Reader) (*Reader, error) {
 	z := new(Reader)
+	z.blocks = defaultBlocks
+	z.blockSize = defaultBlockSize
+	z.r = makeReader(r)
+	z.digest = crc32.NewIEEE()
+	if err := z.readHeader(true); err != nil {
+		return nil, err
+	}
+	return z, nil
+}
+
+// NewReaderN creates a new Reader reading the given reader.
+// The implementation buffers input and may read more data than necessary from r.
+// It is the caller's responsibility to call Close on the Reader when done.
+//
+// With this you can control the approximate size of your blocks,
+// as well as how many blocks you want to have prefetched.
+//
+// Default values for this is blockSize = 250000, blocks = 16,
+// meaning up to 16 blocks of maximum 250000 bytes will be
+// prefetched.
+func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
+	z := new(Reader)
+	z.blocks = blocks
+	z.blockSize = blockSize
 	z.r = makeReader(r)
 	z.digest = crc32.NewIEEE()
 	if err := z.readHeader(true); err != nil {
@@ -101,12 +133,12 @@ func NewReader(r io.Reader) (*Reader, error) {
 // result of its original state from NewReader, but reading from r instead.
 // This permits reusing a Reader rather than allocating a new one.
 func (z *Reader) Reset(r io.Reader) error {
-	z.r = makeReader(r)
-	if z.digest == nil {
-		z.digest = crc32.NewIEEE()
-	} else {
-		z.digest.Reset()
+	if z.closeReader != nil {
+		close(z.closeReader)
+		z.closeReader = nil
 	}
+	z.r = makeReader(r)
+	z.digest = crc32.NewIEEE()
 	z.size = 0
 	z.err = nil
 	return z.readHeader(true)
@@ -216,7 +248,66 @@ func (z *Reader) readHeader(save bool) error {
 
 	z.digest.Reset()
 	z.decompressor = flate.NewReader(z.r)
+	z.doReadAhead()
 	return nil
+}
+
+// Starts readahead.
+// Will return on error (including io.EOF)
+// or when z.closeReader is closed.
+func (z *Reader) doReadAhead() {
+	if z.blocks <= 0 {
+		z.blocks = defaultBlocks
+	}
+	if z.blockSize <= 512 {
+		z.blockSize = defaultBlockSize
+	}
+	z.readAhead = make(chan interface{}, z.blocks*2)
+	closeReader := make(chan struct{}, 0)
+	z.closeReader = closeReader
+	z.lastBlock = false
+
+	go func() {
+		defer close(z.readAhead)
+		defer z.decompressor.Close()
+		// We hold a local reference to digest, since
+		// it way be changed by reset.
+		digest := z.digest
+		// Lock for our digest.
+		dLock := sync.Mutex{}
+		for {
+			buf := make([]byte, z.blockSize)
+			n, err := z.decompressor.Read(buf)
+			if n < len(buf) {
+				buf = buf[0:n]
+			}
+
+			dLock.Lock()
+			go func() {
+				digest.Write(buf)
+				dLock.Unlock()
+			}()
+			z.size += uint32(n)
+
+			select {
+			case z.readAhead <- buf:
+				// Also send the error
+				if err != nil {
+					// When we send an error, digest must be finished.
+					dLock.Lock()
+					dLock.Unlock()
+				}
+				z.readAhead <- err
+
+			case <-closeReader:
+				// Sent on close, we don't care about the next results
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
 }
 
 func (z *Reader) Read(p []byte) (n int, err error) {
@@ -227,11 +318,43 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		return 0, nil
 	}
 
-	n, err = z.decompressor.Read(p)
-	z.digest.Write(p[0:n])
-	z.size += uint32(n)
-	if n != 0 || err != io.EOF {
-		z.err = err
+	for {
+		if len(z.current) == 0 && !z.lastBlock {
+			bufi := <-z.readAhead
+			erri := <-z.readAhead
+
+			if erri != nil {
+				// If not nil, the reader will have exited
+				z.closeReader = nil
+
+				err = erri.(error)
+				if err != io.EOF {
+					z.err = err
+					return
+				}
+				if err == io.EOF {
+					z.lastBlock = true
+					err = nil
+				}
+			}
+			buf := bufi.([]byte)
+			z.current = buf
+		}
+		if len(p) >= len(z.current) {
+			// If len(p) >= len(current), return all content of current
+			copy(p, z.current)
+			n = len(z.current)
+			z.current = nil
+			if z.lastBlock {
+				err = io.EOF
+				break
+			}
+		} else {
+			// We copy as much as there is space for, and reslice current
+			copy(p, z.current[0:len(p)])
+			n = len(p)
+			z.current = z.current[n:]
+		}
 		return
 	}
 
@@ -260,4 +383,10 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.
-func (z *Reader) Close() error { return z.decompressor.Close() }
+func (z *Reader) Close() error {
+	if z.closeReader != nil {
+		close(z.closeReader)
+		z.closeReader = nil
+	}
+	return nil
+}
