@@ -35,7 +35,7 @@ with
 ```import gzip "github.com/klauspost/pgzip"```.
 
 ## Compression
-The simplest way to use this is to simply do the same as you would when using [encoding/gzip](http://golang.org/pkg/encoding/json/). 
+The simplest way to use this is to simply do the same as you would when using [compress/gzip](http://golang.org/pkg/compress/gzip). 
 
 To change the block size, use the added (*pgzip.Writer).SetConcurrency(blockSize, blocks int) function. With this you can control the approximate size of your blocks, as well as how many you want to be processing in parallel. Default values for this is SetConcurrency(250000, 16), meaning blocks are split at 250000 bytes and up to 16 blocks can be processing at once before the writer blocks.
 
@@ -57,7 +57,7 @@ Another side effect of this is, that it is likely to speed up your other code, s
 
 ## Decompression
 
-Decompression works similar to compression. That means that you simply call pgzip the same way as you would call [gzip](http://golang.org/pkg/encoding/json/). 
+Decompression works similar to compression. That means that you simply call pgzip the same way as you would call [compress/gzip](http://golang.org/pkg/compress/gzip). 
 
 The only difference is that if you want to specify your own readahead, you have to use `pgzip.NewReaderN(r io.Reader, blockSize, blocks int)` to get a reader with your custom blocksizes. The `blockSize` is the size of each block decoded, and `blocks` is the maximum number of blocks that is decoded ahead.
 
@@ -72,7 +72,7 @@ Example with GOMAXPROC set to 4 (dual core with 2 hyperthreads)
 
 Compressor  | MB/sec   | speedup | size | size overhead
 ------------|----------|---------|------|---------
-[gzip](http://golang.org/pkg/encoding/json/) (golang) | 15.082MB/s | 1.0x | 6.405.193 | 0%
+[gzip](http://golang.org/pkg/compress/gzip) (golang) | 15.082MB/s | 1.0x | 6.405.193 | 0%
 [pgzip](https://github.com/klauspost/pgzip) (golang) | 26.736MB/s|1.8x | 6.421.585 | 0.2%
 [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf) (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
 
@@ -84,7 +84,7 @@ In the example above, the numbers are as follows on a 4 CPU machine:
 
 Decompressor | Time | Speedup
 -------------|------|--------
-[gzip](http://golang.org/pkg/encoding/json/) (golang) | 1m28.85s | 0%
+[gzip](http://golang.org/pkg/compress/gzip) (golang) | 1m28.85s | 0%
 [pgzip](https://github.com/klauspost/pgzip) (golang) | 43.48s | 104%
 
 But wait, since gzip decompression is inherently singlethreaded (aside from CRC calculation) how can it be more than 100% faster?  Because pgzip due to its design also acts as a buffer. When using ubuffered gzip, you are also waiting for io when you are decompressing. If the gzip decoder can keep up, it will always have data ready for your reader, and you will not be waiting for input to the gzip decompressor to complete.
