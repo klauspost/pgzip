@@ -35,6 +35,8 @@ with
 ```import gzip "github.com/klauspost/pgzip"```.
 
 ## Compression
+The simplest way to use this is to simply do the same as you would when using [encoding/gzip](http://golang.org/pkg/encoding/json/). 
+
 To change the block size, use the added (*pgzip.Writer).SetConcurrency(blockSize, blocks int) function. With this you can control the approximate size of your blocks, as well as how many you want to be processing in parallel. Default values for this is SetConcurrency(250000, 16), meaning blocks are split at 250000 bytes and up to 16 blocks can be processing at once before the writer blocks.
 
 
