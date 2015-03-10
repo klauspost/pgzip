@@ -55,7 +55,9 @@ Another side effect of this is, that it is likely to speed up your other code, s
 
 ## Decompression
 
-Decompression works similar to compression. The only difference is that if you want to specify your own readahead, you have to use `pgzip.NewReaderN(r io.Reader, blockSize, blocks int)` to get a reader with your custom blocksizes.
+Decompression works similar to compression. That means that you simply call pgzip the same way as you would call [gzip](http://golang.org/pkg/encoding/json/). 
+
+The only difference is that if you want to specify your own readahead, you have to use `pgzip.NewReaderN(r io.Reader, blockSize, blocks int)` to get a reader with your custom blocksizes. The `blockSize` is the size of each block decoded, and `blocks` is the maximum number of blocks that is decoded ahead.
 
 See [Example on playground](http://play.golang.org/p/uHv1B5NbDh)
 
