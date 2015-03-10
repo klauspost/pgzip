@@ -90,3 +90,6 @@ Decompressor | Time | Speedup
 But wait, since gzip decompression is inherently singlethreaded (aside from CRC calculation) how can it be more than 100% faster?  Because pgzip due to its design also acts as a buffer. When using ubuffered gzip, you are also waiting for io when you are decompressing. If the gzip decoder can keep up, it will always have data ready for your reader, and you will not be waiting for input to the gzip decompressor to complete.
 
 This is pretty much an optimal situation for pgzip, but it reflects most common usecases for CPU intensive gzip usage.
+
+#License
+This contains large portions of code from the go repository - see GO_LICENSE for more information. The changes are released under MIT License. See LICENSE for more information.
