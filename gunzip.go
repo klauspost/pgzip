@@ -83,6 +83,7 @@ type Reader struct {
 	flg          byte
 	buf          [512]byte
 	err          error
+	closeErr     chan error
 
 	readAhead   chan interface{}
 	current     []byte
@@ -266,10 +267,16 @@ func (z *Reader) doReadAhead() {
 	closeReader := make(chan struct{}, 0)
 	z.closeReader = closeReader
 	z.lastBlock = false
+	closeErr := make(chan error, 1)
+	z.closeErr = closeErr
 
 	go func() {
 		defer close(z.readAhead)
-		defer z.decompressor.Close()
+		defer func() {
+			closeErr <- z.decompressor.Close()
+			close(closeErr)
+		}()
+
 		// We hold a local reference to digest, since
 		// it way be changed by reset.
 		digest := z.digest
@@ -388,5 +395,12 @@ func (z *Reader) Close() error {
 		close(z.closeReader)
 		z.closeReader = nil
 	}
-	return nil
+
+	// Wait for decompressor to be closed and return error, if any.
+	e, ok := <-z.closeErr
+	if !ok {
+		// Channel is closed, so if there was any error it has already been returned.
+		return nil
+	}
+	return e
 }
