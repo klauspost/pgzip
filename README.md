@@ -91,5 +91,7 @@ But wait, since gzip decompression is inherently singlethreaded (aside from CRC 
 
 This is pretty much an optimal situation for pgzip, but it reflects most common usecases for CPU intensive gzip usage.
 
+I haven't included [bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf) in this comparision, since it only can decompress files created by a compatible encoder, and therefore cannot be considered a generic gzip decompressor.
+
 #License
 This contains large portions of code from the go repository - see GO_LICENSE for more information. The changes are released under MIT License. See LICENSE for more information.
