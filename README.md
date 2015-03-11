@@ -11,7 +11,7 @@ You should only use this if you are (de)compressing big amounts of data, say **m
 
 It is important to note that this library creates and reads *standard gzip files*. You do not have to match the compressor/decompressor to get the described speedups, and the gzip files are fully compatible with other gzip readers/writers.
 
-A golang variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
+A golang variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
 
 [![GoDoc][1]][2] [![Build Status][3]][4]
 
@@ -74,7 +74,7 @@ Compressor  | MB/sec   | speedup | size | size overhead
 ------------|----------|---------|------|---------
 [gzip](http://golang.org/pkg/compress/gzip) (golang) | 15.082MB/s | 1.0x | 6.405.193 | 0%
 [pgzip](https://github.com/klauspost/pgzip) (golang) | 26.736MB/s|1.8x | 6.421.585 | 0.2%
-[bgzf](http://godoc.org/code.google.com/p/biogo.bam/bgzf) (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
+[bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf) (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
 
 ## Decompression
 
@@ -90,6 +90,8 @@ Decompressor | Time | Speedup
 But wait, since gzip decompression is inherently singlethreaded (aside from CRC calculation) how can it be more than 100% faster?  Because pgzip due to its design also acts as a buffer. When using ubuffered gzip, you are also waiting for io when you are decompressing. If the gzip decoder can keep up, it will always have data ready for your reader, and you will not be waiting for input to the gzip decompressor to complete.
 
 This is pretty much an optimal situation for pgzip, but it reflects most common usecases for CPU intensive gzip usage.
+
+I haven't included [bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf) in this comparision, since it only can decompress files created by a compatible encoder, and therefore cannot be considered a generic gzip decompressor.
 
 #License
 This contains large portions of code from the go repository - see GO_LICENSE for more information. The changes are released under MIT License. See LICENSE for more information.
