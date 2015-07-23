@@ -9,4 +9,4 @@ go:
 
 script: 
  - go test -v -cpu=1,2,4 .
- - go test -v -cpu=2 -race .
+ - go test -v -cpu=2 -race -short .
