@@ -9,8 +9,8 @@ import (
 	"compress/flate"
 	"errors"
 	"fmt"
+	"github.com/klauspost/crc32"
 	"hash"
-	"hash/crc32"
 	"io"
 )
 
