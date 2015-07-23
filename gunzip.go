@@ -91,6 +91,9 @@ type Reader struct {
 	lastBlock   bool
 	blockSize   int
 	blocks      int
+
+	activeRA bool       // Indication if readahead is active
+	mu       sync.Mutex // Lock for above
 }
 
 // NewReader creates a new Reader reading the given reader.
@@ -134,10 +137,6 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 // result of its original state from NewReader, but reading from r instead.
 // This permits reusing a Reader rather than allocating a new one.
 func (z *Reader) Reset(r io.Reader) error {
-	if z.closeReader != nil {
-		close(z.closeReader)
-		z.closeReader = nil
-	}
 	z.r = makeReader(r)
 	z.digest = crc32.NewIEEE()
 	z.size = 0
@@ -187,6 +186,7 @@ func (z *Reader) read2() (uint32, error) {
 }
 
 func (z *Reader) readHeader(save bool) error {
+	z.killReadAhead()
 	_, err := io.ReadFull(z.r, z.buf[0:10])
 	if err != nil {
 		return err
@@ -253,10 +253,34 @@ func (z *Reader) readHeader(save bool) error {
 	return nil
 }
 
+func (z *Reader) killReadAhead() error {
+	z.mu.Lock()
+	defer z.mu.Unlock()
+	if z.activeRA {
+		if z.closeReader != nil {
+			close(z.closeReader)
+		}
+
+		// Wait for decompressor to be closed and return error, if any.
+		e, ok := <-z.closeErr
+		z.activeRA = false
+		if !ok {
+			// Channel is closed, so if there was any error it has already been returned.
+			return nil
+		}
+		return e
+	}
+	return nil
+}
+
 // Starts readahead.
 // Will return on error (including io.EOF)
 // or when z.closeReader is closed.
 func (z *Reader) doReadAhead() {
+	z.mu.Lock()
+	defer z.mu.Unlock()
+	z.activeRA = true
+
 	if z.blocks <= 0 {
 		z.blocks = defaultBlocks
 	}
@@ -269,6 +293,7 @@ func (z *Reader) doReadAhead() {
 	z.lastBlock = false
 	closeErr := make(chan error, 1)
 	z.closeErr = closeErr
+	z.size = 0
 
 	go func() {
 		defer close(z.readAhead)
@@ -384,23 +409,10 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 	}
 
 	// Yes.  Reset and read from it.
-	z.digest.Reset()
-	z.size = 0
 	return z.Read(p)
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.
 func (z *Reader) Close() error {
-	if z.closeReader != nil {
-		close(z.closeReader)
-		z.closeReader = nil
-	}
-
-	// Wait for decompressor to be closed and return error, if any.
-	e, ok := <-z.closeErr
-	if !ok {
-		// Channel is closed, so if there was any error it has already been returned.
-		return nil
-	}
-	return e
+	return z.killReadAhead()
 }
