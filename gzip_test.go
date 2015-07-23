@@ -7,7 +7,6 @@ package pgzip
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -326,31 +325,20 @@ func TestGzip10M(b *testing.T)  { testBigGzip(10000000, b) }
 
 //func TestGzip30M(b *testing.T)  { testBigGzip(30000000, b) }
 
-func benchmarkGzip(i int, b *testing.B) {
-	if len(testbuf) != i {
-		b.StopTimer()
-		rand.Seed(1337)
-		testbuf = make([]byte, i)
-		for idx := range testbuf {
-			testbuf[idx] = byte(65 + rand.Intn(32))
-		}
-		b.StartTimer()
-	}
-	t := time.Now()
-	n := 0
-	for ; n < b.N; n++ {
-		br := bytes.NewBuffer(testbuf)
-		buf := new(bytes.Buffer)
-		w, _ := NewWriterLevel(buf, 6)
-		io.Copy(w, br)
+func BenchmarkGzip(b *testing.B) {
+	dat, _ := ioutil.ReadFile("testdata/test.json")
+	// 2x
+	dat = append(dat, dat...)
+	// 4x
+	dat = append(dat, dat...)
+	// 8x
+	dat = append(dat, dat...)
+	b.SetBytes(int64(len(dat)))
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		w, _ := NewWriterLevel(ioutil.Discard, 9)
+		w.Write(dat)
+		w.Flush()
 		w.Close()
 	}
-	delta := time.Now().Sub(t)
-	s := delta.Seconds()
-	fmt.Printf("%fMB/s\n", (float64(n*i)/1000000.0)/s)
 }
-
-func BenchmarkGzip1M(b *testing.B)   { benchmarkGzip(1000000, b) }
-func BenchmarkGzip10M(b *testing.B)  { benchmarkGzip(10000000, b) }
-func BenchmarkGzip30M(b *testing.B)  { benchmarkGzip(30000000, b) }
-func BenchmarkGzip100M(b *testing.B) { benchmarkGzip(100000000, b) }
