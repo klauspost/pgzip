@@ -250,11 +250,6 @@ func testFile(i int, t *testing.T) {
 	w, _ := NewWriterLevel(&buf, 6)
 	io.Copy(w, br)
 	w.Close()
-	/*
-		fo, err := os.Create(fmt.Sprintf("testfile.%d.gz", i))
-		_, _ = fo.Write(buf.Bytes())
-		fo.Close()
-	*/
 	r, err := NewReader(&buf)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -268,10 +263,22 @@ func testFile(i int, t *testing.T) {
 	}
 }
 
-func TestFile1(b *testing.T)   { testFile(1, b) }
-func TestFile10(b *testing.T)  { testFile(10, b) }
-func TestFile50(b *testing.T)  { testFile(50, b) }
-func TestFile200(b *testing.T) { testFile(200, b) }
+func TestFile1(t *testing.T)  { testFile(1, t) }
+func TestFile10(t *testing.T) { testFile(10, t) }
+
+func TestFile50(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping 200x file during short test")
+	}
+	testFile(50, t)
+}
+
+func TestFile200(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping 200x file during short test")
+	}
+	testFile(200, t)
+}
 
 func testBigGzip(i int, t *testing.T) {
 	if len(testbuf) != i {
@@ -296,15 +303,7 @@ func testBigGzip(i int, t *testing.T) {
 	if len(testbuf) != w.UncompressedSize() {
 		t.Errorf("uncompressed size does not match. buffer:%d, UncompressedSize():%d", len(testbuf), w.UncompressedSize())
 	}
-	/*	fo, err := os.Create(fmt.Sprintf("output.%d.gz", i))
-		_, _ = fo.Write(buf.Bytes())
-		fo.Close()
 
-
-		fo, err = os.Create(fmt.Sprintf("output.%d", i))
-			_, _ = fo.Write(testbuf)
-			fo.Close()
-	*/
 	r, err := NewReader(&buf)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -318,10 +317,21 @@ func testBigGzip(i int, t *testing.T) {
 	}
 }
 
-func TestGzip1K(b *testing.T)   { testBigGzip(1000, b) }
-func TestGzip100K(b *testing.T) { testBigGzip(100000, b) }
-func TestGzip1M(b *testing.T)   { testBigGzip(1000000, b) }
-func TestGzip10M(b *testing.T)  { testBigGzip(10000000, b) }
+func TestGzip1K(t *testing.T)   { testBigGzip(1000, t) }
+func TestGzip100K(t *testing.T) { testBigGzip(100000, t) }
+func TestGzip1M(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping 1MB random file during short test")
+	}
+
+	testBigGzip(1000000, t)
+}
+func TestGzip10M(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping 1MB random file during short test")
+	}
+	testBigGzip(10000000, t)
+}
 
 //func TestGzip30M(b *testing.T)  { testBigGzip(30000000, b) }
 
