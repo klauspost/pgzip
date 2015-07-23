@@ -268,14 +268,14 @@ func TestFile10(t *testing.T) { testFile(10, t) }
 
 func TestFile50(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping 200x file during short test")
+		t.Skip("skipping during short test")
 	}
 	testFile(50, t)
 }
 
 func TestFile200(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping 200x file during short test")
+		t.Skip("skipping during short test")
 	}
 	testFile(200, t)
 }
@@ -321,14 +321,14 @@ func TestGzip1K(t *testing.T)   { testBigGzip(1000, t) }
 func TestGzip100K(t *testing.T) { testBigGzip(100000, t) }
 func TestGzip1M(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping 1MB random file during short test")
+		t.Skip("skipping during short test")
 	}
 
 	testBigGzip(1000000, t)
 }
 func TestGzip10M(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping 1MB random file during short test")
+		t.Skip("skipping during short test")
 	}
 	testBigGzip(10000000, t)
 }
