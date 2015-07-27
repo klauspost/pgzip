@@ -298,7 +298,10 @@ func testBigGzip(i int, t *testing.T) {
 	if len(testbuf) != w.UncompressedSize() {
 		t.Errorf("uncompressed size does not match. buffer:%d, UncompressedSize():%d", len(testbuf), w.UncompressedSize())
 	}
-	w.Close()
+	err := w.Close()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 	// Close should not affect the number
 	if len(testbuf) != w.UncompressedSize() {
 		t.Errorf("uncompressed size does not match. buffer:%d, UncompressedSize():%d", len(testbuf), w.UncompressedSize())
