@@ -333,20 +333,28 @@ func TestGzip10M(t *testing.T) {
 	testBigGzip(10000000, t)
 }
 
-//func TestGzip30M(b *testing.T)  { testBigGzip(30000000, b) }
+func BenchmarkGzipL1(b *testing.B) { benchmarkGzipN(b, 1) }
+func BenchmarkGzipL2(b *testing.B) { benchmarkGzipN(b, 2) }
+func BenchmarkGzipL3(b *testing.B) { benchmarkGzipN(b, 3) }
+func BenchmarkGzipL4(b *testing.B) { benchmarkGzipN(b, 4) }
+func BenchmarkGzipL5(b *testing.B) { benchmarkGzipN(b, 5) }
+func BenchmarkGzipL6(b *testing.B) { benchmarkGzipN(b, 6) }
+func BenchmarkGzipL7(b *testing.B) { benchmarkGzipN(b, 7) }
+func BenchmarkGzipL8(b *testing.B) { benchmarkGzipN(b, 8) }
+func BenchmarkGzipL9(b *testing.B) { benchmarkGzipN(b, 9) }
 
-func BenchmarkGzip(b *testing.B) {
+func benchmarkGzipN(b *testing.B, level int) {
 	dat, _ := ioutil.ReadFile("testdata/test.json")
-	// 2x
 	dat = append(dat, dat...)
-	// 4x
 	dat = append(dat, dat...)
-	// 8x
 	dat = append(dat, dat...)
+	dat = append(dat, dat...)
+	dat = append(dat, dat...)
+
 	b.SetBytes(int64(len(dat)))
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		w, _ := NewWriterLevel(ioutil.Discard, 9)
+		w, _ := NewWriterLevel(ioutil.Discard, level)
 		w.Write(dat)
 		w.Flush()
 		w.Close()
