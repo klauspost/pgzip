@@ -6,9 +6,9 @@ package pgzip
 
 import (
 	"bytes"
-	"compress/flate"
 	"errors"
 	"fmt"
+	"github.com/klauspost/compress/flate"
 	"github.com/klauspost/crc32"
 	"hash"
 	"io"
