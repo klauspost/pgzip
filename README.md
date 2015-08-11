@@ -76,6 +76,8 @@ Compressor  | MB/sec   | speedup | size | size overhead
 [pgzip](https://github.com/klauspost/pgzip) (golang) | 26.736MB/s|1.8x | 6.421.585 | 0.2%
 [bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf) (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
 
+pgzip also contains a [constant time compression](https://github.com/klauspost/compress#constant-time-compression) mode, that will allow compression at ~150MB per core per second. 
+
 ## Decompression
 
 The decompression speedup is there because it allows you to do other work while the decompression is taking place.
