@@ -7,6 +7,7 @@ package pgzip
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -362,4 +363,52 @@ func benchmarkGzipN(b *testing.B, level int) {
 		w.Flush()
 		w.Close()
 	}
+}
+
+type errorWriter struct {
+	returnError bool
+}
+
+func (e errorWriter) Write(b []byte) (int, error) {
+	if e.returnError {
+		return 0, fmt.Errorf("Intentional Error")
+	}
+	return len(b), nil
+}
+
+// TestErrors tests that errors are returned and that
+// error state is maintained and reset by Reset.
+func TestErrors(t *testing.T) {
+	ew := &errorWriter{}
+	w := NewWriter(ew)
+	dat, _ := ioutil.ReadFile("testdata/test.json")
+	n := 0
+	ew.returnError = true
+	for {
+		_, err := w.Write(dat)
+		if err != nil {
+			break
+		}
+		if n > 1000 {
+			t.Fatal("did not get error before 1000 iterations")
+		}
+		n++
+	}
+	if err := w.Close(); err == nil {
+		t.Fatal("Writer.Close: Should have returned error")
+	}
+	ew.returnError = false
+	w.Reset(ew)
+	_, err := w.Write(dat)
+	if err != nil {
+		t.Fatal("Writer after Reset, unexpected error:", err)
+	}
+	ew.returnError = true
+	if err = w.Flush(); err == nil {
+		t.Fatal("Writer.Flush: Should have returned error")
+	}
+	if err = w.Close(); err == nil {
+		t.Fatal("Writer.Close: Should have returned error")
+	}
+
 }
