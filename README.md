@@ -66,6 +66,9 @@ See [Example on playground](http://play.golang.org/p/uHv1B5NbDh)
 Performance
 ====
 ## Compression
+
+See my blog post in [Benchmarks of Golang Gzip](https://blog.klauspost.com/go-gzipdeflate-benchmarks/).
+
 Compression cost is usually about 0.2% with default settings with a block size of 250k.
 
 Example with GOMAXPROC set to 4 (dual core with 2 hyperthreads)
