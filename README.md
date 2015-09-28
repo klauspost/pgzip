@@ -11,7 +11,7 @@ You should only use this if you are (de)compressing big amounts of data, say **m
 
 It is important to note that this library creates and reads *standard gzip files*. You do not have to match the compressor/decompressor to get the described speedups, and the gzip files are fully compatible with other gzip readers/writers.
 
-A golang variant of this is [bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
+A golang variant of this is [bgzf](https://godoc.org/github.com/biogo/hts/bgzf), which has the same feature, as well as seeking in the resulting file. The only drawback is a slightly bigger overhead compared to this and pure gzip. See a comparison below.
 
 [![GoDoc][1]][2] [![Build Status][3]][4]
 
@@ -96,7 +96,7 @@ But wait, since gzip decompression is inherently singlethreaded (aside from CRC 
 
 This is pretty much an optimal situation for pgzip, but it reflects most common usecases for CPU intensive gzip usage.
 
-I haven't included [bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf) in this comparision, since it only can decompress files created by a compatible encoder, and therefore cannot be considered a generic gzip decompressor. But if you are able to compress your files with a bgzf compatible program, you can expect it to scale beyond 100%.
+I haven't included [bgzf](https://godoc.org/github.com/biogo/hts/bgzf) in this comparision, since it only can decompress files created by a compatible encoder, and therefore cannot be considered a generic gzip decompressor. But if you are able to compress your files with a bgzf compatible program, you can expect it to scale beyond 100%.
 
 #License
 This contains large portions of code from the go repository - see GO_LICENSE for more information. The changes are released under MIT License. See LICENSE for more information.
