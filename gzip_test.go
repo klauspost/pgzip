@@ -372,15 +372,15 @@ type errorWriter struct {
 }
 
 func (e *errorWriter) ErrorNow() {
-	ew.mu.Lock()
+	e.mu.Lock()
 	e.returnError = true
-	ew.mu.Unlock()
+	e.mu.Unlock()
 }
 
 func (e *errorWriter) Reset() {
-	ew.mu.Lock()
+	e.mu.Lock()
 	e.returnError = false
-	ew.mu.Unlock()
+	e.mu.Unlock()
 }
 
 func (e *errorWriter) Write(b []byte) (int, error) {
