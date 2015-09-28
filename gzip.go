@@ -251,7 +251,6 @@ func (z *Writer) checkError() error {
 	select {
 	case err := <-z.pushedErr:
 		z.err = err
-		close(z.pushedErr)
 	default:
 	}
 	return z.err
