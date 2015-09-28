@@ -111,7 +111,7 @@ func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
 // This function must be used by goroutines to set an
 // error condition, since z.err access is restricted
 // to the callers goruotine.
-func (z Writer) pushError(err error) {
+func (z *Writer) pushError(err error) {
 	z.pushedErr <- err
 	close(z.pushedErr)
 }
@@ -409,9 +409,9 @@ func (z *Writer) Flush() error {
 		return nil
 	}
 	if !z.wroteHeader {
-		z.Write(nil)
-		if z.err != nil {
-			return z.err
+		_, err := z.Write(nil)
+		if err != nil {
+			return err
 		}
 	}
 	// We send current block to compression
