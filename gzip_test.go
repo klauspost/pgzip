@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 )
@@ -366,10 +367,25 @@ func benchmarkGzipN(b *testing.B, level int) {
 }
 
 type errorWriter struct {
+	mu          sync.RWMutex
 	returnError bool
 }
 
-func (e errorWriter) Write(b []byte) (int, error) {
+func (e *errorWriter) ErrorNow() {
+	ew.mu.Lock()
+	e.returnError = true
+	ew.mu.Unlock()
+}
+
+func (e *errorWriter) Reset() {
+	ew.mu.Lock()
+	e.returnError = false
+	ew.mu.Unlock()
+}
+
+func (e *errorWriter) Write(b []byte) (int, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	if e.returnError {
 		return 0, fmt.Errorf("Intentional Error")
 	}
@@ -383,7 +399,7 @@ func TestErrors(t *testing.T) {
 	w := NewWriter(ew)
 	dat, _ := ioutil.ReadFile("testdata/test.json")
 	n := 0
-	ew.returnError = true
+	ew.ErrorNow()
 	for {
 		_, err := w.Write(dat)
 		if err != nil {
@@ -397,16 +413,29 @@ func TestErrors(t *testing.T) {
 	if err := w.Close(); err == nil {
 		t.Fatal("Writer.Close: Should have returned error")
 	}
-	ew.returnError = false
+	ew.Reset()
 	w.Reset(ew)
 	_, err := w.Write(dat)
 	if err != nil {
 		t.Fatal("Writer after Reset, unexpected error:", err)
 	}
-	ew.returnError = true
+	ew.ErrorNow()
 	if err = w.Flush(); err == nil {
 		t.Fatal("Writer.Flush: Should have returned error")
 	}
+	if err = w.Close(); err == nil {
+		t.Fatal("Writer.Close: Should have returned error")
+	}
+	// Test Sync only
+	w.Reset(ew)
+	if err = w.Flush(); err == nil {
+		t.Fatal("Writer.Flush: Should have returned error")
+	}
+	if err = w.Close(); err == nil {
+		t.Fatal("Writer.Close: Should have returned error")
+	}
+	// Test Close only
+	w.Reset(ew)
 	if err = w.Close(); err == nil {
 		t.Fatal("Writer.Close: Should have returned error")
 	}
