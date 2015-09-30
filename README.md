@@ -71,15 +71,20 @@ See my blog post in [Benchmarks of Golang Gzip](https://blog.klauspost.com/go-gz
 
 Compression cost is usually about 0.2% with default settings with a block size of 250k.
 
-Example with GOMAXPROC set to 4 (dual core with 2 hyperthreads)
+Example with GOMAXPROC set to 8 (quad core with 8 hyperthreads)
 
-Compressor  | MB/sec   | speedup | size | size overhead
+Content is [Matt Mahoneys 10GB corpus](http://mattmahoney.net/dc/10gb.html). Compression level 6.
+
+Compressor  | MB/sec   | speedup | size | size overhead (lower=better)
 ------------|----------|---------|------|---------
-[gzip](http://golang.org/pkg/compress/gzip) (golang) | 15.082MB/s | 1.0x | 6.405.193 | 0%
-[pgzip](https://github.com/klauspost/pgzip) (golang) | 26.736MB/s|1.8x | 6.421.585 | 0.2%
-[bgzf](http://godoc.org/code.google.com/p/biogo.hts/bgzf) (golang) | 29.525MB/s | 1.9x | 6.875.913 | 7.3%
+[gzip](http://golang.org/pkg/compress/gzip) (golang) | 7.21MB/s | 1.0x | 4786608902 | 0%
+[gzip](http://github.com/klauspost/compress/gzip) (klauspost) | 10.98MB/s | 1.52x | 4781331645 | -0.1%
+[pgzip](https://github.com/klauspost/pgzip) (golang) | 50.76MB/s|7.04x | 4784121440 | -0.052%
+[bgzf](https://godoc.org/github.com/biogo/hts/bgzf) (golang) | 38.65MB/s | 5.36x | 4924899484 | 2.889%
 
 pgzip also contains a [constant time compression](https://github.com/klauspost/compress#constant-time-compression) mode, that will allow compression at ~150MB per core per second. 
+
+See the [complete sheet](https://docs.google.com/spreadsheets/d/1nuNE2nPfuINCZJRMt6wFWhKpToF95I47XjSsc-1rbPQ/edit?usp=sharing) for different content types and compression settings.
 
 ## Decompression
 
