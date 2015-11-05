@@ -87,7 +87,7 @@ type Reader struct {
 	closeErr     chan error
 	multistream  bool
 
-	readAhead   chan interface{}
+	readAhead   chan read
 	current     []byte
 	closeReader chan struct{}
 	lastBlock   bool
@@ -96,6 +96,11 @@ type Reader struct {
 
 	activeRA bool       // Indication if readahead is active
 	mu       sync.Mutex // Lock for above
+}
+
+type read struct {
+	b []byte
+	err error
 }
 
 // NewReader creates a new Reader reading the given reader.
@@ -312,7 +317,7 @@ func (z *Reader) doReadAhead() {
 	if z.blockSize <= 512 {
 		z.blockSize = defaultBlockSize
 	}
-	z.readAhead = make(chan interface{}, z.blocks*2)
+	z.readAhead = make(chan read, z.blocks)
 	closeReader := make(chan struct{}, 0)
 	z.closeReader = closeReader
 	z.lastBlock = false
@@ -330,32 +335,26 @@ func (z *Reader) doReadAhead() {
 		// We hold a local reference to digest, since
 		// it way be changed by reset.
 		digest := z.digest
-		// Lock for our digest.
-		dLock := sync.Mutex{}
+		var wg sync.WaitGroup
 		for {
 			buf := make([]byte, z.blockSize)
 			n, err := z.decompressor.Read(buf)
 			if n < len(buf) {
 				buf = buf[0:n]
 			}
-
-			dLock.Lock()
+			wg.Wait()
+			wg.Add(1)
 			go func() {
 				digest.Write(buf)
-				dLock.Unlock()
+				wg.Done()
 			}()
 			z.size += uint32(n)
 
+			if err != nil {
+				wg.Wait()
+			}
 			select {
-			case z.readAhead <- buf:
-				// Also send the error
-				if err != nil {
-					// When we send an error, digest must be finished.
-					dLock.Lock()
-					dLock.Unlock()
-				}
-				z.readAhead <- err
-
+			case z.readAhead <- read{b: buf, err: err}:
 			case <-closeReader:
 				// Sent on close, we don't care about the next results
 				return
@@ -377,25 +376,22 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 
 	for {
 		if len(z.current) == 0 && !z.lastBlock {
-			bufi := <-z.readAhead
-			erri := <-z.readAhead
+			read := <-z.readAhead
 
-			if erri != nil {
+			if read.err != nil {
 				// If not nil, the reader will have exited
 				z.closeReader = nil
 
-				err = erri.(error)
-				if err != io.EOF {
-					z.err = err
+				if read.err != io.EOF {
+					z.err = read.err
 					return
 				}
-				if err == io.EOF {
+				if read.err == io.EOF {
 					z.lastBlock = true
 					err = nil
 				}
 			}
-			buf := bufi.([]byte)
-			z.current = buf
+			z.current = read.b
 		}
 		if len(p) >= len(z.current) {
 			// If len(p) >= len(current), return all content of current
