@@ -143,6 +143,14 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 	z.r = makeReader(r)
 	z.digest = crc32.NewIEEE()
 	z.multistream = true
+
+	// Account for too small values
+	if z.blocks <= 0 {
+		z.blocks = defaultBlocks
+	}
+	if z.blockSize <= 512 {
+		z.blockSize = defaultBlockSize
+	}
 	z.blockPool = make(chan []byte, z.blocks)
 	for i := 0; i < z.blocks; i++ {
 		z.blockPool <- make([]byte, z.blockSize)
