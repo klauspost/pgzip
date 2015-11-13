@@ -34,6 +34,11 @@ To use as a replacement for gzip, exchange
 with 
 ```import gzip "github.com/klauspost/pgzip"```.
 
+# Changes
+
+* Oct 9, 2015: Reduced allocations by ~35 by using sync.Pool. ~15% overall speedup.
+
+
 ## Compression
 The simplest way to use this is to simply do the same as you would when using [compress/gzip](http://golang.org/pkg/compress/gzip). 
 
