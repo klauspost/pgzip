@@ -38,6 +38,7 @@ with
 
 * Oct 9, 2015: Reduced allocations by ~35 by using sync.Pool. ~15% overall speedup.
 
+Changes in [github.com/klauspost/compress](https://github.com/klauspost/compress#changelog) are also carried over, so see that for more changes.
 
 ## Compression
 The simplest way to use this is to simply do the same as you would when using [compress/gzip](http://golang.org/pkg/compress/gzip). 
