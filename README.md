@@ -36,6 +36,7 @@ with
 
 # Changes
 
+* Dec 8, 2015: Decoder now supports the io.WriterTo interface, giving a speedup and less GC pressure.
 * Oct 9, 2015: Reduced allocations by ~35 by using sync.Pool. ~15% overall speedup.
 
 Changes in [github.com/klauspost/compress](https://github.com/klauspost/compress#changelog) are also carried over, so see that for more changes.
