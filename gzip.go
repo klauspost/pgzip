@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-
 	"sync"
 
 	"github.com/klauspost/compress/flate"
