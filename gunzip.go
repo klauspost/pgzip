@@ -378,7 +378,12 @@ func (z *Reader) doReadAhead() {
 		digest := z.digest
 		var wg sync.WaitGroup
 		for {
-			buf := <-z.blockPool
+			var buf []byte
+			select {
+			case buf = <-z.blockPool:
+			case <-closeReader:
+				return
+			}
 			buf = buf[0:z.blockSize]
 			// Try to fill the buffer
 			n, err := io.ReadFull(decomp, buf)
