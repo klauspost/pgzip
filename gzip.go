@@ -11,6 +11,7 @@ import (
 	"hash"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/klauspost/compress/flate"
 	"github.com/klauspost/crc32"
@@ -83,7 +84,7 @@ func (z *Writer) SetConcurrency(blockSize, blocks int) error {
 	z.blockSize = blockSize
 	z.results = make(chan result, blocks)
 	z.blocks = blocks
-	z.dstPool = sync.Pool{New: func() interface{} { return make([]byte, 0, blockSize+(blockSize)>>2) }}
+	z.dstPool = sync.Pool{New: func() interface{} { return make([]byte, 0, blockSize+(blockSize)>>4) }}
 	return nil
 }
 
@@ -141,28 +142,28 @@ func (z *Writer) init(w io.Writer, level int) {
 	} else {
 		digest = crc32.NewIEEE()
 	}
-
-	*z = Writer{
-		Header: Header{
-			OS: 255, // unknown
-		},
-		w:         w,
-		level:     level,
-		digest:    digest,
-		pushedErr: make(chan struct{}, 0),
-		results:   make(chan result, z.blocks),
-		blockSize: z.blockSize,
-		blocks:    z.blocks,
-	}
-	z.dictFlatePool = sync.Pool{
-		New: func() interface{} {
+	z.Header = Header{OS: 255}
+	z.w = w
+	z.level = level
+	z.digest = digest
+	z.pushedErr = make(chan struct{}, 0)
+	z.results = make(chan result, z.blocks)
+	z.err = nil
+	z.closed = false
+	z.Comment = ""
+	z.Extra = nil
+	z.ModTime = time.Time{}
+	z.wroteHeader = false
+	z.currentBuffer = nil
+	z.buf = [10]byte{}
+	z.prevTail = nil
+	z.size = 0
+	if z.dictFlatePool.New == nil {
+		z.dictFlatePool.New = func() interface{} {
 			f, _ := flate.NewWriterDict(w, level, nil)
 			return f
-		},
+		}
 	}
-	bs := z.blockSize
-	z.dstPool = sync.Pool{New: func() interface{} { return make([]byte, 0, bs+(bs)>>4) }}
-
 }
 
 // Reset discards the Writer z's state and makes it equivalent to the
@@ -463,7 +464,7 @@ func (z *Writer) Flush() error {
 
 // UncompressedSize will return the number of bytes written.
 // pgzip only, not a function in the official gzip package.
-func (z Writer) UncompressedSize() int {
+func (z *Writer) UncompressedSize() int {
 	return z.size
 }
 
