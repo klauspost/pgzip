@@ -111,7 +111,7 @@ Compressor  | MB/sec   | speedup | size | size overhead (lower=better)
 [bgzf](https://godoc.org/github.com/biogo/hts/bgzf) (biogo) | 38.65MB/s | 5.36x | 4924899484 | 2.889%
 [pargzip](https://godoc.org/github.com/golang/build/pargzip) (builder) | 32.00MB/s | 4.44x | 4791226567 | 0.096%
 
-pgzip also contains a [linear time compression](https://github.com/klauspost/compress#linear-time-compression) mode, that will allow compression at ~150MB per core per second, independent of the content.
+pgzip also contains a [linear time compression](https://github.com/klauspost/compress#linear-time-compression-huffman-only) mode, that will allow compression at ~150MB per core per second, independent of the content.
 
 See the [complete sheet](https://docs.google.com/spreadsheets/d/1nuNE2nPfuINCZJRMt6wFWhKpToF95I47XjSsc-1rbPQ/edit?usp=sharing) for different content types and compression settings.
 
