@@ -11,6 +11,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"runtime"
 	"sync"
 	"time"
 
@@ -18,9 +19,9 @@ import (
 )
 
 const (
-	defaultBlockSize = 256 << 10
+	defaultBlockSize = 1 << 20
 	tailSize         = 16384
-	defaultBlocks    = 16
+	defaultBlocks    = 4
 )
 
 // These constants are copied from the flate package, so that code that imports
@@ -115,7 +116,7 @@ func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
 		return nil, fmt.Errorf("gzip: invalid compression level: %d", level)
 	}
 	z := new(Writer)
-	z.SetConcurrency(defaultBlockSize, defaultBlocks)
+	z.SetConcurrency(defaultBlockSize, runtime.GOMAXPROCS(0))
 	z.init(w, level)
 	return z, nil
 }
@@ -174,7 +175,7 @@ func (z *Writer) Reset(w io.Writer) {
 	if z.results != nil && !z.closed {
 		close(z.results)
 	}
-	z.SetConcurrency(defaultBlockSize, defaultBlocks)
+	z.SetConcurrency(defaultBlockSize, runtime.GOMAXPROCS(0))
 	z.init(w, z.level)
 }
 
