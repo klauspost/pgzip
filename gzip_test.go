@@ -547,31 +547,31 @@ func TestWriteError(t *testing.T) {
 			}
 			n, err := copyBuffer(w, bytes.NewBuffer(in), copyBuf)
 			if err == nil {
-				t.Fatalf("Level %d: Expected an error, writer was %#v", l, ew)
+				t.Errorf("Level %d: Expected an error, writer was %#v", l, ew)
 			}
 			n2, err := w.Write([]byte{1, 2, 2, 3, 4, 5})
 			if n2 != 0 {
-				t.Fatal("Level", l, "Expected 0 length write, got", n)
+				t.Error("Level", l, "Expected 0 length write, got", n)
 			}
 			if err == nil {
-				t.Fatal("Level", l, "Expected an error")
+				t.Error("Level", l, "Expected an error")
 			}
 			err = w.Flush()
 			if err == nil {
-				t.Fatal("Level", l, "Expected an error on flush")
+				t.Error("Level", l, "Expected an error on flush")
 			}
 			err = w.Close()
 			if err == nil {
-				t.Fatal("Level", l, "Expected an error on close")
+				t.Error("Level", l, "Expected an error on close")
 			}
 
 			w.Reset(ioutil.Discard)
 			n2, err = w.Write([]byte{1, 2, 3, 4, 5, 6})
 			if err != nil {
-				t.Fatal("Level", l, "Got unexpected error after reset:", err)
+				t.Error("Level", l, "Got unexpected error after reset:", err)
 			}
 			if n2 == 0 {
-				t.Fatal("Level", l, "Got 0 length write, expected > 0")
+				t.Error("Level", l, "Got 0 length write, expected > 0")
 			}
 			if testing.Short() {
 				return
