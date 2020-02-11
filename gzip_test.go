@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -611,4 +612,67 @@ func copyBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err er
 		}
 	}
 	return written, err
+}
+
+// Test that the sync.Pools are working properly and we are not leaking buffers
+func TestAllocations(t *testing.T) {
+	w := NewWriter(ioutil.Discard)
+	w.SetConcurrency(100000, 10)
+	data := bytes.Repeat([]byte("TEST"), 41234) // varying block splits
+
+	// Prime the pool to do initial allocs
+	for i := 0; i < 10; i++ {
+		_, _ = w.Write(data)
+	}
+	_ = w.Flush()
+
+	allocBytes := AllocBytesPerRun(1000, func() {
+		_, _ = w.Write(data)
+	})
+
+	// Locally it still allocates 660 bytes, which can probably be further reduced,
+	// but it's better than the 175846 bytes before the pool release fix this tests.
+	// TODO: Further reduce allocations
+	if allocBytes > 1024 {
+		t.Errorf("Write allocated too much memory per run (%.0f bytes), Pool used incorrectly?", allocBytes)
+	}
+}
+
+// AllocBytesPerRUn returns the average total size of allocations during calls to f.
+// The return value is in bytes.
+//
+// To compute the number of allocations, the function will first be run once as
+// a warm-up. The average total size of allocations over the specified number of
+// runs will then be measured and returned.
+//
+// AllocBytesPerRun sets GOMAXPROCS to 1 during its measurement and will restore
+// it before returning.
+//
+// This function is based on testing.AllocsPerRun, which counts the number of
+// allocations instead of the total size of them in bytes.
+func AllocBytesPerRun(runs int, f func()) (avg float64) {
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+
+	// Warm up the function
+	f()
+
+	// Measure the starting statistics
+	var memstats runtime.MemStats
+	runtime.ReadMemStats(&memstats)
+	allocs := 0 - memstats.Alloc
+
+	// Run the function the specified number of times
+	for i := 0; i < runs; i++ {
+		f()
+	}
+
+	// Read the final statistics
+	runtime.ReadMemStats(&memstats)
+	allocs += memstats.Alloc
+
+	// Average the mallocs over the runs (not counting the warm-up).
+	// We are forced to return a float64 because the API is silly, but do
+	// the division as integers so we can ask if AllocsPerRun()==1
+	// instead of AllocsPerRun()<2.
+	return float64(allocs / uint64(runs))
 }
