@@ -256,12 +256,18 @@ func (z *Writer) compressCurrent(flush bool) {
 	}
 
 	z.wg.Add(1)
-	go z.compressBlock(c, z.prevTail, r, z.closed)
+	tail := z.prevTail
 	if len(c) > tailSize {
-		z.prevTail = c[len(c)-tailSize:]
+		buf := z.dstPool.Get().([]byte) // Put in .compressBlock
+		// Copy tail from current buffer before handing the buffer over to the
+		// compressBlock goroutine.
+		buf = append(buf[:0], c[len(c)-tailSize:]...)
+		z.prevTail = buf
 	} else {
 		z.prevTail = nil
 	}
+	go z.compressBlock(c, tail, r, z.closed)
+
 	z.currentBuffer = z.dstPool.Get().([]byte) // Put in .compressBlock
 	z.currentBuffer = z.currentBuffer[:0]
 
@@ -429,6 +435,11 @@ func (z *Writer) compressBlock(p, prevTail []byte, r result, closed bool) {
 		}
 	}
 	z.dictFlatePool.Put(compressor) // Get above
+
+	if prevTail != nil {
+		z.dstPool.Put(prevTail) // Get in .compressCurrent
+	}
+
 	// Read back buffer
 	buf = dest.Bytes()
 	r.result <- buf
