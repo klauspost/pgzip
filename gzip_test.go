@@ -629,11 +629,12 @@ func TestAllocations(t *testing.T) {
 	allocBytes := AllocBytesPerRun(1000, func() {
 		_, _ = w.Write(data)
 	})
+	t.Logf("Allocated %.0f bytes per Write on average", allocBytes)
 
 	// Locally it still allocates 660 bytes, which can probably be further reduced,
 	// but it's better than the 175846 bytes before the pool release fix this tests.
 	// TODO: Further reduce allocations
-	if allocBytes > 1024 {
+	if allocBytes > 10240 {
 		t.Errorf("Write allocated too much memory per run (%.0f bytes), Pool used incorrectly?", allocBytes)
 	}
 }
@@ -659,7 +660,7 @@ func AllocBytesPerRun(runs int, f func()) (avg float64) {
 	// Measure the starting statistics
 	var memstats runtime.MemStats
 	runtime.ReadMemStats(&memstats)
-	allocs := 0 - memstats.Alloc
+	oldTotal := memstats.TotalAlloc
 
 	// Run the function the specified number of times
 	for i := 0; i < runs; i++ {
@@ -668,7 +669,7 @@ func AllocBytesPerRun(runs int, f func()) (avg float64) {
 
 	// Read the final statistics
 	runtime.ReadMemStats(&memstats)
-	allocs += memstats.Alloc
+	allocs := memstats.TotalAlloc - oldTotal
 
 	// Average the mallocs over the runs (not counting the warm-up).
 	// We are forced to return a float64 because the API is silly, but do
