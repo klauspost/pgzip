@@ -239,6 +239,12 @@ func (z *Writer) writeString(s string) (err error) {
 // compressCurrent will compress the data currently buffered
 // This should only be called from the main writer/flush/closer
 func (z *Writer) compressCurrent(flush bool) {
+	c := z.currentBuffer
+	if len(c) > z.blockSize {
+		// This can never happen through the public interface.
+		panic("len(z.currentBuffer) > z.blockSize (most likely due to concurrent Write race)")
+	}
+
 	r := result{}
 	r.result = make(chan []byte, 1)
 	r.notifyWritten = make(chan struct{}, 0)
@@ -247,12 +253,6 @@ func (z *Writer) compressCurrent(flush bool) {
 	case z.results <- r:
 	case <-z.pushedErr:
 		return
-	}
-
-	c := z.currentBuffer
-	if len(c) > z.blockSize {
-		// This can never happen through the public interface.
-		panic("len(z.currentBuffer) > z.blockSize")
 	}
 
 	z.wg.Add(1)
@@ -386,7 +386,7 @@ func (z *Writer) Write(p []byte) (int, error) {
 		z.digest.Write(q[:length])
 		z.currentBuffer = append(z.currentBuffer, q[:length]...)
 		if len(z.currentBuffer) > z.blockSize {
-			panic("z.currentBuffer too large")
+			panic("z.currentBuffer too large (most likely due to concurrent Write race)")
 		}
 		if len(z.currentBuffer) == z.blockSize {
 			z.compressCurrent(false)
