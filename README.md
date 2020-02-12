@@ -39,7 +39,6 @@ You might need to get/update the dependencies:
 
 ```
 go get -u github.com/klauspost/compress
-go get -u github.com/klauspost/crc32
 ```
 
 Usage
