@@ -359,23 +359,30 @@ func (z *Writer) Write(p []byte) (int, error) {
 		// Start receiving data from compressors
 		go func() {
 			listen := z.results
+			var failed bool
 			for {
 				r, ok := <-listen
 				// If closed, we are finished.
 				if !ok {
 					return
 				}
+				if failed {
+					close(r.notifyWritten)
+					continue
+				}
 				buf := <-r.result
 				n, err := z.w.Write(buf)
 				if err != nil {
 					z.pushError(err)
 					close(r.notifyWritten)
-					return
+					failed = true
+					continue
 				}
 				if n != len(buf) {
 					z.pushError(fmt.Errorf("gzip: short write %d should be %d", n, len(buf)))
+					failed = true
 					close(r.notifyWritten)
-					return
+					continue
 				}
 				z.dstPool.Put(buf)
 				close(r.notifyWritten)

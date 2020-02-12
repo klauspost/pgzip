@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -511,72 +512,75 @@ func TestErrors(t *testing.T) {
 
 }
 
-// A writer that fails after N writes.
+// A writer that fails after N bytes.
 type errorWriter2 struct {
 	N int
 }
 
 func (e *errorWriter2) Write(b []byte) (int, error) {
+	e.N -= len(b)
 	if e.N <= 0 {
 		return 0, io.ErrClosedPipe
 	}
-	e.N--
 	return len(b), nil
 }
 
 // Test if errors from the underlying writer is passed upwards.
 func TestWriteError(t *testing.T) {
-	buf := new(bytes.Buffer)
-	n := 65536
+	n := defaultBlockSize + 1024
 	if !testing.Short() {
 		n *= 4
 	}
-	for i := 0; i < n; i++ {
-		fmt.Fprintf(buf, "asdasfasf%d%dfghfgujyut%dyutyu\n", i, i, i)
-	}
-	in := buf.Bytes()
+	// Make it incompressible...
+	in := make([]byte, n+1<<10)
+	io.ReadFull(rand.New(rand.NewSource(0xabad1dea)), in)
+
 	// We create our own buffer to control number of writes.
 	copyBuf := make([]byte, 128)
 	for l := 0; l < 10; l++ {
-		for fail := 1; fail <= 16; fail *= 2 {
-			// Fail after 'fail' writes
-			ew := &errorWriter2{N: fail}
-			w, err := NewWriterLevel(ew, l)
-			if err != nil {
-				t.Fatalf("NewWriter: level %d: %v", l, err)
-			}
-			n, err := copyBuffer(w, bytes.NewBuffer(in), copyBuf)
-			if err == nil {
-				t.Errorf("Level %d: Expected an error, writer was %#v", l, ew)
-			}
-			n2, err := w.Write([]byte{1, 2, 2, 3, 4, 5})
-			if n2 != 0 {
-				t.Error("Level", l, "Expected 0 length write, got", n)
-			}
-			if err == nil {
-				t.Error("Level", l, "Expected an error")
-			}
-			err = w.Flush()
-			if err == nil {
-				t.Error("Level", l, "Expected an error on flush")
-			}
-			err = w.Close()
-			if err == nil {
-				t.Error("Level", l, "Expected an error on close")
-			}
+		t.Run("level-"+strconv.Itoa(l), func(t *testing.T) {
+			for fail := 1; fail < n; fail *= 10 {
+				// Fail after 'fail' writes
+				ew := &errorWriter2{N: fail}
+				w, err := NewWriterLevel(ew, l)
+				if err != nil {
+					t.Fatalf("NewWriter: level %d: %v", l, err)
+				}
+				// Set concurrency low enough that errors should propagate.
+				w.SetConcurrency(128<<10, 4)
+				_, err = copyBuffer(w, bytes.NewBuffer(in), copyBuf)
+				if err == nil {
+					t.Errorf("Level %d: Expected an error, writer was %#v", l, ew)
+				}
+				n2, err := w.Write([]byte{1, 2, 2, 3, 4, 5})
+				if n2 != 0 {
+					t.Error("Level", l, "Expected 0 length write, got", n2)
+				}
+				if err == nil {
+					t.Error("Level", l, "Expected an error")
+				}
+				err = w.Flush()
+				if err == nil {
+					t.Error("Level", l, "Expected an error on flush")
+				}
+				err = w.Close()
+				if err == nil {
+					t.Error("Level", l, "Expected an error on close")
+				}
 
-			w.Reset(ioutil.Discard)
-			n2, err = w.Write([]byte{1, 2, 3, 4, 5, 6})
-			if err != nil {
-				t.Error("Level", l, "Got unexpected error after reset:", err)
+				w.Reset(ioutil.Discard)
+				n2, err = w.Write([]byte{1, 2, 3, 4, 5, 6})
+				if err != nil {
+					t.Error("Level", l, "Got unexpected error after reset:", err)
+				}
+				if n2 == 0 {
+					t.Error("Level", l, "Got 0 length write, expected > 0")
+				}
+				if testing.Short() {
+					return
+				}
 			}
-			if n2 == 0 {
-				t.Error("Level", l, "Got 0 length write, expected > 0")
-			}
-			if testing.Short() {
-				return
-			}
-		}
+		})
 	}
 }
 
