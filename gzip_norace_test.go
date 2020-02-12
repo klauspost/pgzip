@@ -25,7 +25,7 @@ func TestAllocations(t *testing.T) {
 	}
 	_ = w.Flush()
 
-	allocBytes := AllocBytesPerRun(1000, func() {
+	allocBytes := allocBytesPerRun(1000, func() {
 		_, _ = w.Write(data)
 	})
 	t.Logf("Allocated %.0f bytes per Write on average", allocBytes)
@@ -38,7 +38,7 @@ func TestAllocations(t *testing.T) {
 	}
 }
 
-// AllocBytesPerRUn returns the average total size of allocations during calls to f.
+// allocBytesPerRun returns the average total size of allocations during calls to f.
 // The return value is in bytes.
 //
 // To compute the number of allocations, the function will first be run once as
@@ -50,7 +50,7 @@ func TestAllocations(t *testing.T) {
 //
 // This function is based on testing.AllocsPerRun, which counts the number of
 // allocations instead of the total size of them in bytes.
-func AllocBytesPerRun(runs int, f func()) (avg float64) {
+func allocBytesPerRun(runs int, f func()) (avg float64) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	// Disable garbage collector, because it could clear our pools during the run
 	oldGCPercent := debug.SetGCPercent(-1)
