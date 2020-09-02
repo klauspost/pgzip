@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"runtime/pprof"
 	"strings"
 	"testing"
 	"time"
@@ -331,6 +332,98 @@ func TestDecompressor(t *testing.T) {
 	}
 }
 
+func TestDecompressorReset(t *testing.T) {
+	b := new(bytes.Buffer)
+	var gzip *Reader
+
+	for _, tt := range gunzipTests {
+		in := bytes.NewReader(tt.gzip)
+		if gzip == nil {
+			var err error
+			gzip, err = NewReader(in)
+			if err != nil {
+				t.Fatalf("NewReader: %s", err)
+			}
+			defer gzip.Close()
+		} else {
+			err := gzip.Reset(in)
+			if err != nil {
+				t.Errorf("%s: Reset: %s", tt.name, err)
+				continue
+			}
+		}
+		if tt.name != gzip.Name {
+			t.Errorf("%s: got name %s", tt.name, gzip.Name)
+		}
+		b.Reset()
+
+		n, err := io.Copy(b, gzip)
+		if err != tt.err {
+			t.Errorf("%s: io.Copy: %v want %v", tt.name, err, tt.err)
+		}
+		s := b.String()
+		if s != tt.raw {
+			t.Errorf("%s: got %d-byte %q want %d-byte %q", tt.name, n, s, len(tt.raw), tt.raw)
+		}
+
+		// Test Reader Reset.
+		in = bytes.NewReader(tt.gzip)
+		err = gzip.Reset(in)
+		if err != nil {
+			t.Errorf("%s: Reset: %s", tt.name, err)
+			continue
+		}
+		if tt.name != gzip.Name {
+			t.Errorf("%s: got name %s", tt.name, gzip.Name)
+		}
+		b.Reset()
+		n, err = io.Copy(b, gzip)
+		if err != tt.err {
+			t.Errorf("%s: io.Copy: %v want %v", tt.name, err, tt.err)
+		}
+		s = b.String()
+		if s != tt.raw {
+			t.Errorf("%s: got %d-byte %q want %d-byte %q", tt.name, n, s, len(tt.raw), tt.raw)
+		}
+	}
+}
+
+func TestDecompressorResetNoRead(t *testing.T) {
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		// Typical runtime is 2-3s, so we add an order of magnitude.
+		case <-time.After(30 * time.Second):
+			pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+		case <-done:
+		}
+	}()
+	in, err := ioutil.ReadFile("testdata/bigempty.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz, err := NewReader(bytes.NewBuffer(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 100; i++ {
+		if testing.Short() && i > 10 {
+			break
+		}
+		err := gz.Reset(bytes.NewBuffer(in))
+		if err != nil {
+			t.Fatal(i, err)
+		}
+		// Read 100KB, ignore the rest
+		lr := io.LimitedReader{N: 100 << 10, R: gz}
+		_, err = io.Copy(ioutil.Discard, &lr)
+		if err != nil {
+			t.Fatal(i, err)
+		}
+	}
+}
+
 func TestIssue6550(t *testing.T) {
 	f, err := os.Open("testdata/issue6550.gz")
 	if err != nil {
@@ -637,7 +730,7 @@ func TestTruncatedGunzipBlocks(t *testing.T) {
 	rand.Read(in)
 	var buf bytes.Buffer
 	for i := 0; i < len(in); i += 512 {
-		enc,_ := kpgzip.NewWriterLevel(&buf, 0)
+		enc, _ := kpgzip.NewWriterLevel(&buf, 0)
 		_, err := enc.Write(in[:i])
 		if err != nil {
 			t.Fatal(err)
