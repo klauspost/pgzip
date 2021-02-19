@@ -570,6 +570,65 @@ func TestWriteTo(t *testing.T) {
 	}
 }
 
+func TestCopyAfterReadAll(t *testing.T) {
+	for _, tt := range gunzipTests {
+		if tt.err != nil {
+			// Only use valid gzip tests.
+			continue
+		}
+
+		dec, err := NewReader(bytes.NewBuffer(tt.gzip))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Read the stream twice with io.Copy.
+		if b, err := ioutil.ReadAll(ioutil.NopCloser(dec)); err != nil {
+			t.Fatalf("ioutil.ReadAll end of stream: unexpected error %v", err)
+		} else if !bytes.Equal(b, []byte(tt.raw)) {
+			t.Fatal("ioutil.ReadAll output didn't match input")
+		}
+		if n, err := io.Copy(ioutil.Discard, dec); err != nil {
+			t.Fatalf("io.Copy end of stream: unexpected error %v", err)
+		} else if n != 0 {
+			t.Fatalf("io.Copy at end of stream should read no bytes, got %v", n)
+		}
+	}
+}
+
+func TestMultipleCopy(t *testing.T) {
+	for _, tt := range gunzipTests {
+		if tt.err != nil {
+			// Only use valid gzip tests.
+			continue
+		}
+
+		dec, err := NewReader(bytes.NewBuffer(tt.gzip))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Read to the end of the stream (using WriteTo).
+		if n, err := io.Copy(ioutil.Discard, dec); err != nil {
+			t.Fatalf("io.Copy full stream: unexpected error %v", err)
+		} else if n != int64(len(tt.raw)) {
+			t.Fatal("did not decompress everything")
+		}
+
+		// Now try to read again using Read and WriteTo.
+		if b, err := ioutil.ReadAll(ioutil.NopCloser(dec)); err != nil {
+			t.Fatalf("ioutil.ReadAll end of stream: unexpected error %v", err)
+		} else if len(b) != 0 {
+			t.Fatalf("ioutil.ReadAll at end of stream should read no bytes, got %v", b)
+		}
+		if n, err := io.Copy(ioutil.Discard, dec); err != nil {
+			t.Fatalf("io.Copy end of stream: unexpected error %v", err)
+		} else if n != 0 {
+			t.Fatalf("io.Copy at end of stream should read no bytes, got %v", n)
+		}
+	}
+}
+
 func BenchmarkGunzipCopy(b *testing.B) {
 	dat, _ := ioutil.ReadFile("testdata/test.json")
 	dat = append(dat, dat...)

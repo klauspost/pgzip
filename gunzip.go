@@ -98,7 +98,7 @@ type Reader struct {
 	activeRA bool       // Indication if readahead is active
 	mu       sync.Mutex // Lock for above
 
-	blockPool chan []byte
+	blockPool *sync.Pool
 }
 
 type read struct {
@@ -110,20 +110,7 @@ type read struct {
 // The implementation buffers input and may read more data than necessary from r.
 // It is the caller's responsibility to call Close on the Reader when done.
 func NewReader(r io.Reader) (*Reader, error) {
-	z := new(Reader)
-	z.blocks = defaultBlocks
-	z.blockSize = defaultBlockSize
-	z.r = makeReader(r)
-	z.digest = crc32.NewIEEE()
-	z.multistream = true
-	z.blockPool = make(chan []byte, z.blocks)
-	for i := 0; i < z.blocks; i++ {
-		z.blockPool <- make([]byte, z.blockSize)
-	}
-	if err := z.readHeader(true); err != nil {
-		return nil, err
-	}
-	return z, nil
+	return NewReaderN(r, defaultBlockSize, defaultBlocks)
 }
 
 // NewReaderN creates a new Reader reading the given reader.
@@ -140,25 +127,8 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 	z := new(Reader)
 	z.blocks = blocks
 	z.blockSize = blockSize
-	z.r = makeReader(r)
-	z.digest = crc32.NewIEEE()
-	z.multistream = true
-
-	// Account for too small values
-	if z.blocks <= 0 {
-		z.blocks = defaultBlocks
-	}
-	if z.blockSize <= 512 {
-		z.blockSize = defaultBlockSize
-	}
-	z.blockPool = make(chan []byte, z.blocks)
-	for i := 0; i < z.blocks; i++ {
-		z.blockPool <- make([]byte, z.blockSize)
-	}
-	if err := z.readHeader(true); err != nil {
-		return nil, err
-	}
-	return z, nil
+	err := z.Reset(r)
+	return z, err
 }
 
 // Reset discards the Reader z's state and makes it equivalent to the
@@ -181,9 +151,16 @@ func (z *Reader) Reset(r io.Reader) error {
 	}
 
 	if z.blockPool == nil {
-		z.blockPool = make(chan []byte, z.blocks)
+		// Save this in a closure, so as to avoid races.
+		blockSize := z.blockSize
+		z.blockPool = &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, blockSize)
+			},
+		}
+		// Pre-fill the pool.
 		for i := 0; i < z.blocks; i++ {
-			z.blockPool <- make([]byte, z.blockSize)
+			z.blockPool.Put(z.blockPool.New())
 		}
 	}
 
@@ -334,11 +311,11 @@ func (z *Reader) killReadAhead() error {
 
 		for blk := range z.readAhead {
 			if blk.b != nil {
-				z.blockPool <- blk.b
+				z.blockPool.Put(blk.b)
 			}
 		}
 		if cap(z.current) > 0 {
-			z.blockPool <- z.current
+			z.blockPool.Put(z.current)
 			z.current = nil
 		}
 		if !ok {
@@ -390,9 +367,10 @@ func (z *Reader) doReadAhead() {
 		for {
 			var buf []byte
 			select {
-			case buf = <-z.blockPool:
 			case <-closeReader:
 				return
+			default:
+				buf = z.blockPool.Get().([]byte)
 			}
 			buf = buf[0:z.blockSize]
 			// Try to fill the buffer
@@ -428,7 +406,7 @@ func (z *Reader) doReadAhead() {
 			case z.readAhead <- read{b: buf, err: err}:
 			case <-closeReader:
 				// Sent on close, we don't care about the next results
-				z.blockPool <- buf
+				z.blockPool.Put(buf)
 				return
 			}
 			if err != nil {
@@ -470,7 +448,7 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		if len(p) >= len(avail) {
 			// If len(p) >= len(current), return all content of current
 			n = copy(p, avail)
-			z.blockPool <- z.current
+			z.blockPool.Put(z.current)
 			z.current = nil
 			if z.lastBlock {
 				err = io.EOF
@@ -503,7 +481,9 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 
 	// Is there another?
 	if err = z.readHeader(false); err != nil {
-		z.err = err
+		if err != io.EOF {
+			z.err = err
+		}
 		return
 	}
 
@@ -514,8 +494,11 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 	total := int64(0)
 	for {
-		if z.err != nil {
-			return total, z.err
+		if err = z.err; err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return total, err
 		}
 		// We write both to output and digest.
 		for {
@@ -544,7 +527,7 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 				return total, err
 			}
 			// Put block back
-			z.blockPool <- read.b
+			z.blockPool.Put(read.b)
 			if z.lastBlock {
 				break
 			}
@@ -552,8 +535,12 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 
 		// Finished file; check checksum + size.
 		if _, err := io.ReadFull(z.r, z.buf[0:8]); err != nil {
-			z.err = err
-			return total, err
+			if total == 0 && err == io.EOF {
+				err = nil
+			} else {
+				z.err = err
+				return total, err
+			}
 		}
 		crc32, isize := get4(z.buf[0:4]), get4(z.buf[4:8])
 		sum := z.digest.Sum32()
