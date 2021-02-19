@@ -98,7 +98,7 @@ type Reader struct {
 	activeRA bool       // Indication if readahead is active
 	mu       sync.Mutex // Lock for above
 
-	blockPool chan []byte
+	blockPool *sync.Pool
 }
 
 type read struct {
@@ -151,9 +151,16 @@ func (z *Reader) Reset(r io.Reader) error {
 	}
 
 	if z.blockPool == nil {
-		z.blockPool = make(chan []byte, z.blocks)
+		// Save this in a closure, so as to avoid races.
+		blockSize := z.blockSize
+		z.blockPool = &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, blockSize)
+			},
+		}
+		// Pre-fill the pool.
 		for i := 0; i < z.blocks; i++ {
-			z.blockPool <- make([]byte, z.blockSize)
+			z.blockPool.Put(z.blockPool.New())
 		}
 	}
 
@@ -304,11 +311,11 @@ func (z *Reader) killReadAhead() error {
 
 		for blk := range z.readAhead {
 			if blk.b != nil {
-				z.blockPool <- blk.b
+				z.blockPool.Put(blk.b)
 			}
 		}
 		if cap(z.current) > 0 {
-			z.blockPool <- z.current
+			z.blockPool.Put(z.current)
 			z.current = nil
 		}
 		if !ok {
@@ -360,9 +367,10 @@ func (z *Reader) doReadAhead() {
 		for {
 			var buf []byte
 			select {
-			case buf = <-z.blockPool:
 			case <-closeReader:
 				return
+			default:
+				buf = z.blockPool.Get().([]byte)
 			}
 			buf = buf[0:z.blockSize]
 			// Try to fill the buffer
@@ -398,7 +406,7 @@ func (z *Reader) doReadAhead() {
 			case z.readAhead <- read{b: buf, err: err}:
 			case <-closeReader:
 				// Sent on close, we don't care about the next results
-				z.blockPool <- buf
+				z.blockPool.Put(buf)
 				return
 			}
 			if err != nil {
@@ -440,7 +448,7 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		if len(p) >= len(avail) {
 			// If len(p) >= len(current), return all content of current
 			n = copy(p, avail)
-			z.blockPool <- z.current
+			z.blockPool.Put(z.current)
 			z.current = nil
 			if z.lastBlock {
 				err = io.EOF
@@ -514,7 +522,7 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 				return total, err
 			}
 			// Put block back
-			z.blockPool <- read.b
+			z.blockPool.Put(read.b)
 			if z.lastBlock {
 				break
 			}
