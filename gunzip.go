@@ -481,7 +481,9 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 
 	// Is there another?
 	if err = z.readHeader(false); err != nil {
-		z.err = err
+		if err != io.EOF {
+			z.err = err
+		}
 		return
 	}
 
@@ -492,8 +494,11 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 	total := int64(0)
 	for {
-		if z.err != nil {
-			return total, z.err
+		if err = z.err; err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return total, err
 		}
 		// We write both to output and digest.
 		for {
@@ -530,8 +535,12 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 
 		// Finished file; check checksum + size.
 		if _, err := io.ReadFull(z.r, z.buf[0:8]); err != nil {
-			z.err = err
-			return total, err
+			if total == 0 && err == io.EOF {
+				err = nil
+			} else {
+				z.err = err
+				return total, err
+			}
 		}
 		crc32, isize := get4(z.buf[0:4]), get4(z.buf[4:8])
 		sum := z.digest.Sum32()
