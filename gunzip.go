@@ -110,20 +110,7 @@ type read struct {
 // The implementation buffers input and may read more data than necessary from r.
 // It is the caller's responsibility to call Close on the Reader when done.
 func NewReader(r io.Reader) (*Reader, error) {
-	z := new(Reader)
-	z.blocks = defaultBlocks
-	z.blockSize = defaultBlockSize
-	z.r = makeReader(r)
-	z.digest = crc32.NewIEEE()
-	z.multistream = true
-	z.blockPool = make(chan []byte, z.blocks)
-	for i := 0; i < z.blocks; i++ {
-		z.blockPool <- make([]byte, z.blockSize)
-	}
-	if err := z.readHeader(true); err != nil {
-		return nil, err
-	}
-	return z, nil
+	return NewReaderN(r, defaultBlockSize, defaultBlocks)
 }
 
 // NewReaderN creates a new Reader reading the given reader.
@@ -140,25 +127,8 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 	z := new(Reader)
 	z.blocks = blocks
 	z.blockSize = blockSize
-	z.r = makeReader(r)
-	z.digest = crc32.NewIEEE()
-	z.multistream = true
-
-	// Account for too small values
-	if z.blocks <= 0 {
-		z.blocks = defaultBlocks
-	}
-	if z.blockSize <= 512 {
-		z.blockSize = defaultBlockSize
-	}
-	z.blockPool = make(chan []byte, z.blocks)
-	for i := 0; i < z.blocks; i++ {
-		z.blockPool <- make([]byte, z.blockSize)
-	}
-	if err := z.readHeader(true); err != nil {
-		return nil, err
-	}
-	return z, nil
+	err := z.Reset(r)
+	return z, err
 }
 
 // Reset discards the Reader z's state and makes it equivalent to the
