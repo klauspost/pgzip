@@ -126,13 +126,12 @@ func NewWriterLevel(w io.Writer, level int) (*Writer, error) {
 // to the callers goruotine.
 func (z *Writer) pushError(err error) {
 	z.errMu.Lock()
+	defer z.errMu.Unlock()
 	if z.err != nil {
-		z.errMu.Unlock()
 		return
 	}
 	z.err = err
 	close(z.pushedErr)
-	z.errMu.Unlock()
 }
 
 func (z *Writer) init(w io.Writer, level int) {
