@@ -104,13 +104,12 @@ Content is [Matt Mahoneys 10GB corpus](http://mattmahoney.net/dc/10gb.html). Com
 
 Compressor  | MB/sec   | speedup | size | size overhead (lower=better)
 ------------|----------|---------|------|---------
-[gzip](http://golang.org/pkg/compress/gzip) (golang) | 15.44MB/s (1 thread) | 1.0x | 4781329307 | 0%
-[gzip](http://github.com/klauspost/compress/gzip) (klauspost) | 135.04MB/s (1 thread) | 8.74x | 4894858258 | +2.37%
-[pgzip](https://github.com/klauspost/pgzip) (klauspost) | 1573.23MB/s| 101.9x | 4902285651 | +2.53%
-[bgzf](https://godoc.org/github.com/biogo/hts/bgzf) (biogo) | 361.40MB/s | 23.4x | 4869686090 | +1.85%
-[pargzip](https://godoc.org/github.com/golang/build/pargzip) (builder) | 306.01MB/s | 19.8x | 4786890417 | +0.12%
+[gzip](http://golang.org/pkg/compress/gzip) (golang) | 16.91MB/s (1 thread) | 1.0x | 4781329307 | 0%
+[gzip](http://github.com/klauspost/compress/gzip) (klauspost) | 127.10MB/s (1 thread) | 7.52x | 4885366806 | +2.17%
+[pgzip](https://github.com/klauspost/pgzip) (klauspost) | 2085.35MB/s|  123.34x | 4886132566 | +2.19%
+[pargzip](https://godoc.org/github.com/golang/build/pargzip) (builder) | 334.04MB/s | 19.76x | 4786890417 | +0.12%
 
-pgzip also contains a [linear time compression](https://github.com/klauspost/compress#linear-time-compression-huffman-only) mode, that will allow compression at ~250MB per core per second, independent of the content.
+pgzip also contains a [huffman only compression](https://github.com/klauspost/compress#linear-time-compression-huffman-only) mode, that will allow compression at ~450MB per core per second, largely independent of the content.
 
 See the [complete sheet](https://docs.google.com/spreadsheets/d/1nuNE2nPfuINCZJRMt6wFWhKpToF95I47XjSsc-1rbPQ/edit?usp=sharing) for different content types and compression settings.
 
