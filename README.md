@@ -123,7 +123,7 @@ In the example above, the numbers are as follows on a 4 CPU machine:
 Decompressor | Time | Speedup
 -------------|------|--------
 [gzip](http://golang.org/pkg/compress/gzip) (golang) | 1m28.85s | 0%
-[pgzip](https://github.com/klauspost/pgzip) (golang) | 43.48s | 104%
+[pgzip](https://github.com/klauspost/pgzip) (klauspost) | 43.48s | 104%
 
 But wait, since gzip decompression is inherently singlethreaded (aside from CRC calculation) how can it be more than 100% faster?  Because pgzip due to its design also acts as a buffer. When using unbuffered gzip, you are also waiting for io when you are decompressing. If the gzip decoder can keep up, it will always have data ready for your reader, and you will not be waiting for input to the gzip decompressor to complete.
 
