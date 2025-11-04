@@ -9,7 +9,6 @@ import (
 	oldgz "compress/gzip"
 	"crypto/rand"
 	"io"
-	"io/ioutil"
 	"os"
 	"runtime/pprof"
 	"strings"
@@ -399,7 +398,7 @@ func TestDecompressorResetNoRead(t *testing.T) {
 		case <-done:
 		}
 	}()
-	in, err := ioutil.ReadFile("testdata/bigempty.gz")
+	in, err := os.ReadFile("testdata/bigempty.gz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +406,7 @@ func TestDecompressorResetNoRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if testing.Short() && i > 10 {
 			break
 		}
@@ -417,7 +416,7 @@ func TestDecompressorResetNoRead(t *testing.T) {
 		}
 		// Read 100KB, ignore the rest
 		lr := io.LimitedReader{N: 100 << 10, R: gz}
-		_, err = io.Copy(ioutil.Discard, &lr)
+		_, err = io.Copy(io.Discard, &lr)
 		if err != nil {
 			t.Fatal(i, err)
 		}
@@ -436,7 +435,7 @@ func TestIssue6550(t *testing.T) {
 	defer gzip.Close()
 	done := make(chan bool, 1)
 	go func() {
-		_, err := io.Copy(ioutil.Discard, gzip)
+		_, err := io.Copy(io.Discard, gzip)
 		if err == nil {
 			t.Errorf("Copy succeeded")
 		} else {
@@ -487,7 +486,7 @@ Found:
 	const hello = "hello world\n"
 
 	r.Multistream(false)
-	data, err := ioutil.ReadAll(&r)
+	data, err := io.ReadAll(&r)
 	if string(data) != hello || err != nil {
 		t.Fatalf("first stream = %q, %v, want %q, %v", string(data), err, hello, nil)
 	}
@@ -496,7 +495,7 @@ Found:
 		t.Fatalf("second reset: %v", err)
 	}
 	r.Multistream(false)
-	data, err = ioutil.ReadAll(&r)
+	data, err = io.ReadAll(&r)
 	if string(data) != hello || err != nil {
 		t.Fatalf("second stream = %q, %v, want %q, %v", string(data), err, hello, nil)
 	}
@@ -517,7 +516,7 @@ func TestWriteTo(t *testing.T) {
 	}
 	compressed := &bytes.Buffer{}
 	// Do it twice to test MultiStream functionality
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		w, err := NewWriterLevel(compressed, -2)
 		if err != nil {
 			t.Fatal(err)
@@ -539,7 +538,7 @@ func TestWriteTo(t *testing.T) {
 		t.Fatal(err)
 	}
 	// ReadAll does not use WriteTo, but we wrap it in a NopCloser to be sure.
-	readall, err := ioutil.ReadAll(ioutil.NopCloser(dec))
+	readall, err := io.ReadAll(io.NopCloser(dec))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +570,7 @@ func TestWriteTo(t *testing.T) {
 }
 
 func BenchmarkGunzipCopy(b *testing.B) {
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
@@ -593,7 +592,7 @@ func BenchmarkGunzipCopy(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, err = io.Copy(ioutil.Discard, r)
+		_, err = io.Copy(io.Discard, r)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -601,7 +600,7 @@ func BenchmarkGunzipCopy(b *testing.B) {
 }
 
 func BenchmarkGunzipReadAll(b *testing.B) {
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
@@ -623,7 +622,7 @@ func BenchmarkGunzipReadAll(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, err = ioutil.ReadAll(ioutil.NopCloser(r))
+		_, err = io.ReadAll(io.NopCloser(r))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -631,7 +630,7 @@ func BenchmarkGunzipReadAll(b *testing.B) {
 }
 
 func BenchmarkGunzipStdLib(b *testing.B) {
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
@@ -653,7 +652,7 @@ func BenchmarkGunzipStdLib(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, err = io.Copy(ioutil.Discard, r)
+		_, err = io.Copy(io.Discard, r)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -661,7 +660,7 @@ func BenchmarkGunzipStdLib(b *testing.B) {
 }
 
 func BenchmarkGunzipFlate(b *testing.B) {
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
@@ -683,7 +682,7 @@ func BenchmarkGunzipFlate(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		_, err = io.Copy(ioutil.Discard, r)
+		_, err = io.Copy(io.Discard, r)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -707,7 +706,7 @@ func TestTruncatedGunzip(t *testing.T) {
 		go func() {
 			r, err := NewReader(bytes.NewBuffer(testdata[:i]))
 			if err == nil {
-				b, err := ioutil.ReadAll(r)
+				b, err := io.ReadAll(r)
 				if err == nil && !bytes.Equal(testdata[:i], b) {
 					close(fail)
 				}
@@ -743,7 +742,7 @@ func TestTruncatedGunzipBlocks(t *testing.T) {
 		go func() {
 			r, err := NewReaderN(&buf, 512, 10)
 			if err == nil {
-				b, err := ioutil.ReadAll(r)
+				b, err := io.ReadAll(r)
 				if err == nil && !bytes.Equal(b, in[:i]) {
 					close(fail)
 				}

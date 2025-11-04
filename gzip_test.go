@@ -9,8 +9,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -29,7 +29,7 @@ func TestEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReader: %v", err)
 	}
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewReader: %v", err)
 	}
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatalf("ReadAll: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestLatin1RoundTrip(t *testing.T) {
 			t.Errorf("NewReader: %v", err)
 			continue
 		}
-		_, err = ioutil.ReadAll(r)
+		_, err = io.ReadAll(r)
 		if err != nil {
 			t.Errorf("ReadAll: %v", err)
 			continue
@@ -214,7 +214,7 @@ func TestConcat(t *testing.T) {
 	w.Close()
 
 	r, err := NewReader(&buf)
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if string(data) != "hello world\n" || err != nil {
 		t.Fatalf("ReadAll = %q, %v, want %q, nil", data, err, "hello world")
 	}
@@ -238,12 +238,12 @@ func TestWriterReset(t *testing.T) {
 var testbuf []byte
 
 func testFile(i int, t *testing.T) {
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	dl := len(dat)
 	if len(testbuf) != i*dl {
 		// Make results predictable
 		testbuf = make([]byte, i*dl)
-		for j := 0; j < i; j++ {
+		for j := range i {
 			copy(testbuf[j*dl:j*dl+dl], dat)
 		}
 	}
@@ -257,7 +257,7 @@ func testFile(i int, t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	decoded, err := ioutil.ReadAll(r)
+	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -286,10 +286,10 @@ func TestFile200(t *testing.T) {
 func testBigGzip(i int, t *testing.T) {
 	if len(testbuf) != i {
 		// Make results predictable
-		rand.Seed(1337)
+		rng := rand.New(rand.NewSource(0xabad1dea))
 		testbuf = make([]byte, i)
 		for idx := range testbuf {
-			testbuf[idx] = byte(65 + rand.Intn(32))
+			testbuf[idx] = byte(65 + rng.Intn(32))
 		}
 	}
 
@@ -314,7 +314,7 @@ func testBigGzip(i int, t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	decoded, err := ioutil.ReadAll(r)
+	decoded, err := io.ReadAll(r)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -357,10 +357,10 @@ func testDeterm(i int, t *testing.T) {
 	if testing.Short() {
 		length = defaultBlockSize*2 + 500
 	}
-	rand.Seed(1337)
+	rng := rand.New(rand.NewSource(0xabad1dea))
 	t1 := make([]byte, length)
 	for idx := range t1 {
-		t1[idx] = byte(65 + rand.Intn(8))
+		t1[idx] = byte(65 + rng.Intn(8))
 	}
 
 	br := bytes.NewBuffer(t1)
@@ -378,10 +378,10 @@ func testDeterm(i int, t *testing.T) {
 	w.Flush()
 	w.Close()
 
-	rand.Seed(1337)
+	rng = rand.New(rand.NewSource(0xabad1dea))
 	t2 := make([]byte, length)
 	for idx := range t2 {
-		t2[idx] = byte(65 + rand.Intn(8))
+		t2[idx] = byte(65 + rng.Intn(8))
 	}
 
 	br2 := bytes.NewBuffer(t2)
@@ -419,7 +419,7 @@ func BenchmarkGzipL8(b *testing.B) { benchmarkGzipN(b, 8) }
 func BenchmarkGzipL9(b *testing.B) { benchmarkGzipN(b, 9) }
 
 func benchmarkGzipN(b *testing.B, level int) {
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
 	dat = append(dat, dat...)
@@ -429,7 +429,7 @@ func benchmarkGzipN(b *testing.B, level int) {
 	b.SetBytes(int64(len(dat)))
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		w, _ := NewWriterLevel(ioutil.Discard, level)
+		w, _ := NewWriterLevel(io.Discard, level)
 		w.Write(dat)
 		w.Flush()
 		w.Close()
@@ -467,7 +467,7 @@ func (e *errorWriter) Write(b []byte) (int, error) {
 func TestErrors(t *testing.T) {
 	ew := &errorWriter{}
 	w := NewWriter(ew)
-	dat, _ := ioutil.ReadFile("testdata/test.json")
+	dat, _ := os.ReadFile("testdata/test.json")
 	n := 0
 	ew.ErrorNow()
 	for {
@@ -537,7 +537,7 @@ func TestWriteError(t *testing.T) {
 
 	// We create our own buffer to control number of writes.
 	copyBuf := make([]byte, 128)
-	for l := 0; l < 10; l++ {
+	for l := range 10 {
 		t.Run("level-"+strconv.Itoa(l), func(t *testing.T) {
 			for fail := 1; fail < n; fail *= 10 {
 				// Fail after 'fail' writes
@@ -568,7 +568,7 @@ func TestWriteError(t *testing.T) {
 					t.Error("Level", l, "Expected an error on close")
 				}
 
-				w.Reset(ioutil.Discard)
+				w.Reset(io.Discard)
 				n2, err = w.Write([]byte{1, 2, 3, 4, 5, 6})
 				if err != nil {
 					t.Error("Level", l, "Got unexpected error after reset:", err)
