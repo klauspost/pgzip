@@ -1,6 +1,6 @@
 // These tests are unreliable or only pass under certain conditions.
 // To run:   go test -v -count=1 -cpu=1,2,4,8,16 -tags=unreliable
-// +build unreliable,!race
+//go:build unreliable && !race
 
 package pgzip
 
