@@ -1,6 +1,5 @@
 // These tests are skipped when the race detector (-race) is on
 //go:build !race
-// +build !race
 
 package pgzip
 
