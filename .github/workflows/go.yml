@@ -27,6 +27,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Go get
+      run: go get github.com/klauspost/compress
+
     - name: Vet
       run: go vet ./...
 
@@ -59,6 +62,9 @@ jobs:
 
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Go get
+      run: go get github.com/klauspost/compress
 
     - name: fmt
       run: diff <(gofmt -d .) <(printf "")
