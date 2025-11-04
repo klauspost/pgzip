@@ -1,11 +1,12 @@
 // These tests are skipped when the race detector (-race) is on
+//go:build !race
 // +build !race
 
 package pgzip
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"runtime"
 	"runtime/debug"
 	"testing"
@@ -15,12 +16,12 @@ import (
 // Disabled with -race, because the race detector allocates a lot of memory
 func TestAllocations(t *testing.T) {
 
-	w := NewWriter(ioutil.Discard)
+	w := NewWriter(io.Discard)
 	w.SetConcurrency(100000, 10)
 	data := bytes.Repeat([]byte("TEST"), 41234) // varying block splits
 
 	// Prime the pool to do initial allocs
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, _ = w.Write(data)
 	}
 	_ = w.Flush()
@@ -65,7 +66,7 @@ func allocBytesPerRun(runs int, f func()) (avg float64) {
 	oldTotal := memstats.TotalAlloc
 
 	// Run the function the specified number of times
-	for i := 0; i < runs; i++ {
+	for range runs {
 		f()
 	}
 
