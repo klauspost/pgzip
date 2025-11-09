@@ -21,6 +21,7 @@ import (
 	"hash/crc32"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/klauspost/compress/flate"
@@ -85,7 +86,7 @@ type Reader struct {
 	buf          [512]byte
 	err          error
 	closeErr     chan error
-	multistream  bool
+	multistream  atomic.Bool
 
 	readAhead   chan read
 	roff        int // read offset
@@ -115,7 +116,7 @@ func NewReader(r io.Reader) (*Reader, error) {
 	z.blockSize = defaultBlockSize
 	z.r = makeReader(r)
 	z.digest = crc32.NewIEEE()
-	z.multistream = true
+	z.multistream.Store(true)
 	z.blockPool = make(chan []byte, z.blocks)
 	for i := 0; i < z.blocks; i++ {
 		z.blockPool <- make([]byte, z.blockSize)
@@ -123,6 +124,8 @@ func NewReader(r io.Reader) (*Reader, error) {
 	if err := z.readHeader(true); err != nil {
 		return nil, err
 	}
+	z.doReadAhead()
+
 	return z, nil
 }
 
@@ -142,7 +145,7 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 	z.blockSize = blockSize
 	z.r = makeReader(r)
 	z.digest = crc32.NewIEEE()
-	z.multistream = true
+	z.multistream.Store(true)
 
 	// Account for too small values
 	if z.blocks <= 0 {
@@ -158,6 +161,7 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 	if err := z.readHeader(true); err != nil {
 		return nil, err
 	}
+	z.doReadAhead()
 	return z, nil
 }
 
@@ -170,7 +174,7 @@ func (z *Reader) Reset(r io.Reader) error {
 	z.digest = crc32.NewIEEE()
 	z.size = 0
 	z.err = nil
-	z.multistream = true
+	z.multistream.Store(true)
 
 	// Account for uninitialized values
 	if z.blocks <= 0 {
@@ -186,8 +190,11 @@ func (z *Reader) Reset(r io.Reader) error {
 			z.blockPool <- make([]byte, z.blockSize)
 		}
 	}
-
-	return z.readHeader(true)
+	if err := z.readHeader(true); err != nil {
+		return err
+	}
+	z.doReadAhead()
+	return nil
 }
 
 // Multistream controls whether the reader supports multistream files.
@@ -207,7 +214,7 @@ func (z *Reader) Reset(r io.Reader) error {
 // To start the next stream, call z.Reset(r) followed by z.Multistream(false).
 // If there is no next stream, z.Reset(r) will return io.EOF.
 func (z *Reader) Multistream(ok bool) {
-	z.multistream = ok
+	z.multistream.Store(ok)
 }
 
 // GZIP (RFC 1952) is little-endian, unlike ZLIB (RFC 1950).
@@ -252,8 +259,6 @@ func (z *Reader) read2() (uint32, error) {
 }
 
 func (z *Reader) readHeader(save bool) error {
-	z.killReadAhead()
-
 	_, err := io.ReadFull(z.r, z.buf[0:10])
 	if err != nil {
 		return err
@@ -262,6 +267,7 @@ func (z *Reader) readHeader(save bool) error {
 		return ErrHeader
 	}
 	z.flg = z.buf[3]
+	z.size = 0
 	if save {
 		z.ModTime = time.Unix(int64(get4(z.buf[4:8])), 0)
 		// z.buf[8] is xfl, ignored
@@ -315,8 +321,13 @@ func (z *Reader) readHeader(save bool) error {
 	}
 
 	z.digest.Reset()
-	z.decompressor = flate.NewReader(z.r)
-	z.doReadAhead()
+	if r, ok := z.decompressor.(flate.Resetter); ok {
+		if err := r.Reset(z.r, nil); err != nil {
+			return err
+		}
+	} else {
+		z.decompressor = flate.NewReader(z.r)
+	}
 	return nil
 }
 
@@ -377,7 +388,9 @@ func (z *Reader) doReadAhead() {
 	decomp := z.decompressor
 
 	go func() {
+		var wg sync.WaitGroup
 		defer func() {
+			wg.Wait()
 			closeErr <- decomp.Close()
 			close(closeErr)
 			close(ra)
@@ -386,7 +399,6 @@ func (z *Reader) doReadAhead() {
 		// We hold a local reference to digest, since
 		// it way be changed by reset.
 		digest := z.digest
-		var wg sync.WaitGroup
 		for {
 			var buf []byte
 			select {
@@ -424,6 +436,27 @@ func (z *Reader) doReadAhead() {
 			if err != nil {
 				wg.Wait()
 			}
+			if err == io.EOF {
+				// Finished file; check checksum + size.
+				if _, err = io.ReadFull(z.r, z.buf[0:8]); err == nil {
+					crc32, isize := get4(z.buf[0:4]), get4(z.buf[4:8])
+					sum := z.digest.Sum32()
+					if sum != crc32 || isize != z.size {
+						err = ErrChecksum
+					} else {
+						// File is ok; should we attempt reading one more?
+						if !z.multistream.Load() {
+							err = io.EOF
+						} else {
+							err = z.readHeader(false)
+						}
+					}
+				}
+			}
+			if err == nil && len(buf) == 0 {
+				z.blockPool <- buf
+				continue
+			}
 			select {
 			case z.readAhead <- read{b: buf, err: err}:
 			case <-closeReader:
@@ -449,12 +482,14 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 	for {
 		if len(z.current) == 0 && !z.lastBlock {
 			read := <-z.readAhead
-
 			if read.err != nil {
 				// If not nil, the reader will have exited
 				z.closeReader = nil
 
 				if read.err != io.EOF {
+					if cap(read.b) > 0 {
+						z.blockPool <- read.b
+					}
 					z.err = read.err
 					return
 				}
@@ -483,32 +518,7 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		}
 		return
 	}
-
-	// Finished file; check checksum + size.
-	if _, err := io.ReadFull(z.r, z.buf[0:8]); err != nil {
-		z.err = err
-		return 0, err
-	}
-	crc32, isize := get4(z.buf[0:4]), get4(z.buf[4:8])
-	sum := z.digest.Sum32()
-	if sum != crc32 || isize != z.size {
-		z.err = ErrChecksum
-		return 0, z.err
-	}
-
-	// File is ok; should we attempt reading one more?
-	if !z.multistream {
-		return 0, io.EOF
-	}
-
-	// Is there another?
-	if err = z.readHeader(false); err != nil {
-		z.err = err
-		return
-	}
-
-	// Yes.  Reset and read from it.
-	return z.Read(p)
+	return n, err
 }
 
 func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
@@ -526,69 +536,38 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 		z.blockPool <- z.current
 		z.current = nil
 	}
-	for {
-		if z.err != nil {
-			return total, z.err
-		}
-		// We write both to output and digest.
-		for {
-			// Read from input
-			read := <-z.readAhead
-			if read.err != nil {
-				// If not nil, the reader will have exited
-				z.closeReader = nil
+	for z.err == nil && !z.lastBlock {
+		// Read from input
+		read := <-z.readAhead
+		if read.err != nil {
+			// If not nil, the reader will have exited
+			z.closeReader = nil
 
-				if read.err != io.EOF {
-					z.err = read.err
-					return total, z.err
+			if read.err != io.EOF {
+				if cap(read.b) > 0 {
+					z.blockPool <- read.b
 				}
-				if read.err == io.EOF {
-					z.lastBlock = true
-					err = nil
-				}
+				z.err = read.err
+				return total, z.err
 			}
-			// Write what we got
-			n, err := w.Write(read.b)
-			if n != len(read.b) {
-				return total, io.ErrShortWrite
-			}
-			total += int64(n)
-			if err != nil {
-				return total, err
-			}
-			// Put block back
-			z.blockPool <- read.b
-			if z.lastBlock {
-				break
+			if read.err == io.EOF {
+				z.lastBlock = true
+				err = nil
 			}
 		}
-
-		// Finished file; check checksum + size.
-		if _, err := io.ReadFull(z.r, z.buf[0:8]); err != nil {
-			z.err = err
-			return total, err
+		// Write what we got
+		n, err := w.Write(read.b)
+		if n != len(read.b) {
+			return total, io.ErrShortWrite
 		}
-		crc32, isize := get4(z.buf[0:4]), get4(z.buf[4:8])
-		sum := z.digest.Sum32()
-		if sum != crc32 || isize != z.size {
-			z.err = ErrChecksum
-			return total, z.err
-		}
-		// File is ok; should we attempt reading one more?
-		if !z.multistream {
-			return total, nil
-		}
-
-		// Is there another?
-		err = z.readHeader(false)
-		if err == io.EOF {
-			return total, nil
-		}
+		total += int64(n)
 		if err != nil {
-			z.err = err
 			return total, err
 		}
+		// Put block back
+		z.blockPool <- read.b
 	}
+	return total, z.err
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.
