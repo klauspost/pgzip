@@ -96,8 +96,8 @@ type Reader struct {
 	blockSize   int
 	blocks      int
 
-	activeRA bool       // Indication if readahead is active
-	mu       sync.Mutex // Lock for above
+	readAheadStarted atomic.Bool // Indication if readahead has been started
+	mu               sync.Mutex  // Lock for channels during killReadAhead
 
 	blockPool chan []byte
 }
@@ -124,7 +124,6 @@ func NewReader(r io.Reader) (*Reader, error) {
 	if err := z.readHeader(true); err != nil {
 		return nil, err
 	}
-	z.doReadAhead()
 
 	return z, nil
 }
@@ -161,7 +160,6 @@ func NewReaderN(r io.Reader, blockSize, blocks int) (*Reader, error) {
 	if err := z.readHeader(true); err != nil {
 		return nil, err
 	}
-	z.doReadAhead()
 	return z, nil
 }
 
@@ -175,6 +173,7 @@ func (z *Reader) Reset(r io.Reader) error {
 	z.size = 0
 	z.err = nil
 	z.multistream.Store(true)
+	z.readAheadStarted.Store(false)
 
 	// Account for uninitialized values
 	if z.blocks <= 0 {
@@ -193,7 +192,6 @@ func (z *Reader) Reset(r io.Reader) error {
 	if err := z.readHeader(true); err != nil {
 		return err
 	}
-	z.doReadAhead()
 	return nil
 }
 
@@ -332,42 +330,39 @@ func (z *Reader) readHeader(save bool) error {
 }
 
 func (z *Reader) killReadAhead() error {
+	if !z.readAheadStarted.Load() {
+		return nil
+	}
+
 	z.mu.Lock()
 	defer z.mu.Unlock()
-	if z.activeRA {
-		if z.closeReader != nil {
-			close(z.closeReader)
-		}
-
-		// Wait for decompressor to be closed and return error, if any.
-		e, ok := <-z.closeErr
-		z.activeRA = false
-
-		for blk := range z.readAhead {
-			if blk.b != nil {
-				z.blockPool <- blk.b
-			}
-		}
-		if cap(z.current) > 0 {
-			z.blockPool <- z.current
-			z.current = nil
-		}
-		if !ok {
-			// Channel is closed, so if there was any error it has already been returned.
-			return nil
-		}
-		return e
+	if z.closeReader != nil {
+		close(z.closeReader)
 	}
-	return nil
+
+	// Wait for decompressor to be closed and return error, if any.
+	e, ok := <-z.closeErr
+
+	for blk := range z.readAhead {
+		if blk.b != nil {
+			z.blockPool <- blk.b
+		}
+	}
+	if cap(z.current) > 0 {
+		z.blockPool <- z.current
+		z.current = nil
+	}
+	if !ok {
+		// Channel is closed, so if there was any error it has already been returned.
+		return nil
+	}
+	return e
 }
 
 // Starts readahead.
 // Will return on error (including io.EOF)
 // or when z.closeReader is closed.
 func (z *Reader) doReadAhead() {
-	z.mu.Lock()
-	defer z.mu.Unlock()
-	z.activeRA = true
 
 	if z.blocks <= 0 {
 		z.blocks = defaultBlocks
@@ -479,6 +474,10 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		return 0, nil
 	}
 
+	if z.readAheadStarted.CompareAndSwap(false, true) {
+		z.doReadAhead()
+	}
+
 	for {
 		if len(z.current) == 0 && !z.lastBlock {
 			read := <-z.readAhead
@@ -522,6 +521,10 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 }
 
 func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
+	if z.readAheadStarted.CompareAndSwap(false, true) {
+		z.doReadAhead()
+	}
+
 	total := int64(0)
 	avail := z.current[z.roff:]
 	if len(avail) != 0 {
