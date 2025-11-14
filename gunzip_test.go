@@ -331,6 +331,55 @@ func TestDecompressor(t *testing.T) {
 	}
 }
 
+func TestDecompressorWrapped(t *testing.T) {
+	// Wrap, so WriteTo cannot be used.
+	type x struct {
+		io.Reader
+	}
+	b := new(bytes.Buffer)
+	for _, tt := range gunzipTests {
+		in := bytes.NewReader(tt.gzip)
+		gzip, err := NewReader(in)
+		if err != nil {
+			t.Errorf("%s: NewReader: %s", tt.name, err)
+			continue
+		}
+		defer gzip.Close()
+		if tt.name != gzip.Name {
+			t.Errorf("%s: got name %s", tt.name, gzip.Name)
+		}
+		b.Reset()
+		n, err := io.Copy(b, x{gzip})
+		if err != tt.err {
+			t.Errorf("%s: io.Copy: %v want %v", tt.name, err, tt.err)
+		}
+		s := b.String()
+		if s != tt.raw {
+			t.Errorf("%s: got %d-byte %q want %d-byte %q", tt.name, n, s, len(tt.raw), tt.raw)
+		}
+
+		// Test Reader Reset.
+		in = bytes.NewReader(tt.gzip)
+		err = gzip.Reset(in)
+		if err != nil {
+			t.Errorf("%s: Reset: %s", tt.name, err)
+			continue
+		}
+		if tt.name != gzip.Name {
+			t.Errorf("%s: got name %s", tt.name, gzip.Name)
+		}
+		b.Reset()
+		n, err = io.Copy(b, x{gzip})
+		if err != tt.err {
+			t.Errorf("%s: io.Copy: %v want %v", tt.name, err, tt.err)
+		}
+		s = b.String()
+		if s != tt.raw {
+			t.Errorf("%s: got %d-byte %q want %d-byte %q", tt.name, n, s, len(tt.raw), tt.raw)
+		}
+	}
+}
+
 func TestDecompressorReset(t *testing.T) {
 	b := new(bytes.Buffer)
 	var gzip *Reader
@@ -758,4 +807,43 @@ func TestTruncatedGunzipBlocks(t *testing.T) {
 			timer.Stop()
 		}
 	}
+}
+
+func TestWriterTo(t *testing.T) {
+	f, err := os.ReadFile("testdata/bigempty.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f = append(f, f...)
+
+	t.Run("run-single", func(t *testing.T) {
+		r, err := NewReader(bytes.NewReader(f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Multistream(false)
+		defer r.Close()
+
+		n, err := io.Copy(io.Discard, r)
+		if err != nil {
+			t.Fatal("Checksum failed:", err)
+		}
+
+		t.Log("Size", n, "Checksum OK")
+	})
+	t.Run("run-multi", func(t *testing.T) {
+		r, err := NewReader(bytes.NewReader(f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Multistream(true)
+		defer r.Close()
+
+		n, err := io.Copy(io.Discard, r)
+		if err != nil {
+			t.Fatal("Checksum failed:", err)
+		}
+
+		t.Log("Size", n, "Checksum OK")
+	})
 }
