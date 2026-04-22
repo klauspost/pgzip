@@ -155,10 +155,6 @@ func (z *Writer) init(w io.Writer, level int) {
 	z.Extra = nil
 	z.ModTime = time.Time{}
 	z.wroteHeader = false
-	// Return any live buffer back to the pool before clearing it so
-	// repeated NewWriter/Close cycles via init(...) stop leaking one
-	// dstPool slot per iteration (#56). Same for prevTail, which init
-	// used to drop on the floor.
 	if z.currentBuffer != nil {
 		z.dstPool.Put(z.currentBuffer)
 		z.currentBuffer = nil
