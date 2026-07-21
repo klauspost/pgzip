@@ -473,6 +473,11 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
+	// Already drained (e.g. via WriteTo/io.Copy). Returning here avoids
+	// blocking on a full blockPool when current is nil.
+	if z.lastBlock && len(z.current) == 0 {
+		return 0, io.EOF
+	}
 
 	if z.readAheadStarted.CompareAndSwap(false, true) {
 		z.doReadAhead()
@@ -504,8 +509,10 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 		if len(p) >= len(avail) {
 			// If len(p) >= len(current), return all content of current
 			n = copy(p, avail)
-			z.blockPool <- z.current
-			z.current = nil
+			if z.current != nil {
+				z.blockPool <- z.current
+				z.current = nil
+			}
 			if z.lastBlock {
 				err = io.EOF
 				break
@@ -555,20 +562,27 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 			}
 			if read.err == io.EOF {
 				z.lastBlock = true
-				err = nil
 			}
 		}
-		// Write what we got
-		n, err := w.Write(read.b)
-		if n != len(read.b) {
-			return total, io.ErrShortWrite
+		// Write what we got (even empty final block).
+		if len(read.b) > 0 {
+			n, err := w.Write(read.b)
+			if n != len(read.b) {
+				return total, io.ErrShortWrite
+			}
+			total += int64(n)
+			if err != nil {
+				return total, err
+			}
 		}
-		total += int64(n)
-		if err != nil {
-			return total, err
+		// Put block back when it came from the pool.
+		if cap(read.b) > 0 {
+			z.blockPool <- read.b
 		}
-		// Put block back
-		z.blockPool <- read.b
+	}
+	// WriterTo must not return io.EOF; io.Copy surfaces it to callers (#38).
+	if z.err == io.EOF {
+		return total, nil
 	}
 	return total, z.err
 }
