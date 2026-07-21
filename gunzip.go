@@ -172,6 +172,9 @@ func (z *Reader) Reset(r io.Reader) error {
 	z.digest = crc32.NewIEEE()
 	z.size = 0
 	z.err = nil
+	z.lastBlock = false
+	z.current = nil
+	z.roff = 0
 	z.multistream.Store(true)
 	z.readAheadStarted.Store(false)
 
