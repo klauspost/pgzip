@@ -847,3 +847,62 @@ func TestWriterTo(t *testing.T) {
 		t.Log("Size", n, "Checksum OK")
 	})
 }
+
+func TestReadAfterWriteToNoDeadlock(t *testing.T) {
+	// echo hello | gzip -c
+	gzipData := []byte{
+		0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xcb, 0x48,
+		0xcd, 0xc9, 0xc9, 0xe7, 0x02, 0x00, 0x20, 0x30, 0x3a, 0x36, 0x06, 0x00,
+		0x00, 0x00,
+	}
+	rdr, err := NewReader(bytes.NewReader(gzipData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rdr.Close()
+
+	n, err := io.Copy(io.Discard, rdr)
+	if err != nil {
+		t.Fatalf("WriteTo/Copy: %v", err)
+	}
+	if n != 6 {
+		t.Fatalf("copied %d, want 6", n)
+	}
+
+	done := make(chan struct{})
+	var rn int
+	var rerr error
+	go func() {
+		defer close(done)
+		var buf [8]byte
+		rn, rerr = rdr.Read(buf[:])
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Read after WriteTo deadlocked")
+	}
+	if rn != 0 || rerr != io.EOF {
+		t.Fatalf("Read after drain: n=%d err=%v, want 0, EOF", rn, rerr)
+	}
+}
+
+func TestWriteToDoesNotReturnEOF(t *testing.T) {
+	gzipData := []byte{
+		0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0xcb, 0x48,
+		0xcd, 0xc9, 0xc9, 0xe7, 0x02, 0x00, 0x20, 0x30, 0x3a, 0x36, 0x06, 0x00,
+		0x00, 0x00,
+	}
+	rdr, err := NewReader(bytes.NewReader(gzipData))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rdr.Close()
+	n, err := rdr.WriteTo(io.Discard)
+	if err != nil {
+		t.Fatalf("WriteTo err=%v, want nil (not EOF)", err)
+	}
+	if n != 6 {
+		t.Fatalf("n=%d want 6", n)
+	}
+}
