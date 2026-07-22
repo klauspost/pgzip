@@ -848,7 +848,6 @@ func TestWriterTo(t *testing.T) {
 	})
 }
 
-
 func TestReadAfterWriteToNoDeadlock(t *testing.T) {
 	// echo hello | gzip -c
 	gzipData := []byte{

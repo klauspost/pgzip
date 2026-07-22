@@ -571,10 +571,16 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 		if len(read.b) > 0 {
 			n, err := w.Write(read.b)
 			if n != len(read.b) {
+				if cap(read.b) > 0 {
+					z.blockPool <- read.b
+				}
 				return total, io.ErrShortWrite
 			}
 			total += int64(n)
 			if err != nil {
+				if cap(read.b) > 0 {
+					z.blockPool <- read.b
+				}
 				return total, err
 			}
 		}
