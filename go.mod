@@ -1,5 +1,5 @@
 module github.com/klauspost/pgzip
 
-go 1.23
+go 1.25
 
-require github.com/klauspost/compress v1.18.1
+require github.com/klauspost/compress v1.20.1

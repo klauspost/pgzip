@@ -423,11 +423,9 @@ func (z *Reader) doReadAhead() {
 				buf = buf[0:n]
 			}
 			wg.Wait()
-			wg.Add(1)
-			go func() {
+			wg.Go(func() {
 				digest.Write(buf)
-				wg.Done()
-			}()
+			})
 			z.size += uint32(n)
 
 			// If we return any error, out digest must be ready
