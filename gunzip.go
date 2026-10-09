@@ -514,6 +514,7 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 				z.blockPool <- z.current
 				z.current = nil
 			}
+			z.roff = 0
 			if z.lastBlock {
 				err = io.EOF
 				break
