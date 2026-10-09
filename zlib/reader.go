@@ -7,6 +7,7 @@ package zlib
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"hash"
 	"hash/adler32"
 	"io"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/klauspost/compress/flate"
 )
+
+var errClosed = errors.New("zlib: reader closed")
 
 const (
 	zlibDeflate   = 8
@@ -177,14 +180,18 @@ func (z *Reader) readHeader(dict []byte) error {
 }
 
 func (z *Reader) killReadAhead() error {
+	z.mu.Lock()
+	defer z.mu.Unlock()
 	if !z.readAheadStarted.Load() {
+		if z.err == nil {
+			z.err = errClosed
+		}
 		return nil
 	}
 
-	z.mu.Lock()
-	defer z.mu.Unlock()
 	if z.closeReader != nil {
 		close(z.closeReader)
+		z.closeReader = nil
 	}
 
 	// Wait for decompressor to be closed and return error, if any.
@@ -198,6 +205,10 @@ func (z *Reader) killReadAhead() error {
 	if cap(z.current) > 0 {
 		z.blockPool <- z.current
 		z.current = nil
+	}
+	z.readAheadStarted.Store(false)
+	if z.err == nil {
+		z.err = errClosed
 	}
 	if !ok {
 		return nil
@@ -237,6 +248,7 @@ func (z *Reader) doReadAhead() {
 		digest := z.digest
 		for {
 			var buf []byte
+			wg.Wait()
 			select {
 			case buf = <-z.blockPool:
 			case <-closeReader:
@@ -257,7 +269,6 @@ func (z *Reader) doReadAhead() {
 			if n < len(buf) {
 				buf = buf[0:n]
 			}
-			wg.Wait()
 			wg.Go(func() {
 				digest.Write(buf)
 			})
@@ -356,6 +367,9 @@ func (z *Reader) Read(p []byte) (n int, err error) {
 
 // WriteTo writes uncompressed data directly to w.
 func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
+	if z.err != nil {
+		return 0, z.err
+	}
 	if z.readAheadStarted.CompareAndSwap(false, true) {
 		z.doReadAhead()
 	}

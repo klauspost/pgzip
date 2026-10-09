@@ -254,3 +254,106 @@ func TestReaderChunked(t *testing.T) {
 		t.Fatalf("Chunked read mismatch")
 	}
 }
+
+func TestReaderCloseTwice(t *testing.T) {
+	data := []byte("Testing multiple Close calls on Reader.")
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+	_, _ = w.Write(data)
+	_ = w.Close()
+
+	r, err := NewReader(&buf)
+	if err != nil {
+		t.Fatalf("NewReader failed: %v", err)
+	}
+
+	p := make([]byte, 5)
+	n, err := r.Read(p)
+	if err != nil || n != 5 {
+		t.Fatalf("Read failed: n=%d, err=%v", n, err)
+	}
+
+	if err := r.Close(); err != nil {
+		t.Fatalf("first Close failed: %v", err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("second Close failed: %v", err)
+	}
+
+	var after [10]byte
+	n, err = r.Read(after[:])
+	if !errors.Is(err, errClosed) {
+		t.Fatalf("expected errClosed on Read after Close, got: %v (n=%d)", err, n)
+	}
+}
+
+func TestReaderCloseThenReset(t *testing.T) {
+	data1 := []byte("Stream 1 for close then reset test.")
+	data2 := []byte("Stream 2 for close then reset test.")
+
+	var buf1, buf2 bytes.Buffer
+	w1 := NewWriter(&buf1)
+	_, _ = w1.Write(data1)
+	_ = w1.Close()
+
+	w2 := NewWriter(&buf2)
+	_, _ = w2.Write(data2)
+	_ = w2.Close()
+
+	r, err := NewReader(&buf1)
+	if err != nil {
+		t.Fatalf("NewReader failed: %v", err)
+	}
+
+	p := make([]byte, 5)
+	_, _ = r.Read(p)
+
+	if err := r.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	resetter, ok := r.(Resetter)
+	if !ok {
+		t.Fatalf("Reader does not implement Resetter")
+	}
+	if err := resetter.Reset(&buf2, nil); err != nil {
+		t.Fatalf("Reset failed: %v", err)
+	}
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll after Reset failed: %v", err)
+	}
+	if !bytes.Equal(out, data2) {
+		t.Fatalf("data mismatch after Reset: got %q, want %q", out, data2)
+	}
+}
+
+func TestReaderReadAfterClose(t *testing.T) {
+	data := []byte("Test read after close.")
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+	_, _ = w.Write(data)
+	_ = w.Close()
+
+	r, err := NewReader(&buf)
+	if err != nil {
+		t.Fatalf("NewReader failed: %v", err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	p := make([]byte, 10)
+	n, err := r.Read(p)
+	if !errors.Is(err, errClosed) {
+		t.Fatalf("expected errClosed on Read after Close, got: %v (n=%d)", err, n)
+	}
+
+	var out bytes.Buffer
+	_, err = r.(*Reader).WriteTo(&out)
+	if !errors.Is(err, errClosed) {
+		t.Fatalf("expected errClosed on WriteTo after Close, got: %v", err)
+	}
+}
+

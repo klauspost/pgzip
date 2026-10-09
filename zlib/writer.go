@@ -439,10 +439,10 @@ func (z *Writer) Close() error {
 		}
 	}
 	z.compressCurrent(true)
+	close(z.results)
 	if err := z.checkError(); err != nil {
 		return err
 	}
-	close(z.results)
 	binary.BigEndian.PutUint32(z.scratch[:], z.digest.Sum32())
 	_, err := z.w.Write(z.scratch[0:4])
 	if err != nil {

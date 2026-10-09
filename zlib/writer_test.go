@@ -188,13 +188,13 @@ func TestWriterDictionary(t *testing.T) {
 	// Decompressing with wrong dict should fail
 	wrongDict := []byte("incorrect dictionary")
 	_, err = stdzlib.NewReaderDict(bytes.NewReader(bufWithDict.Bytes()), wrongDict)
-	if !errors.Is(err, stdzlib.ErrDictionary) && err == nil {
+	if !errors.Is(err, stdzlib.ErrDictionary) {
 		t.Fatalf("expected ErrDictionary with wrong dict, got: %v", err)
 	}
 
 	// Decompressing without dict should fail
 	_, err = stdzlib.NewReader(bytes.NewReader(bufWithDict.Bytes()))
-	if !errors.Is(err, stdzlib.ErrDictionary) && err == nil {
+	if !errors.Is(err, stdzlib.ErrDictionary) {
 		t.Fatalf("expected ErrDictionary with nil dict, got: %v", err)
 	}
 
