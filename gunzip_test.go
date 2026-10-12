@@ -906,3 +906,27 @@ func TestWriteToDoesNotReturnEOF(t *testing.T) {
 		t.Fatalf("n=%d want 6", n)
 	}
 }
+
+// A member cut exactly where its 8-byte trailer should begin must not read
+// as complete: compress/gzip returns io.ErrUnexpectedEOF there, and so must
+// this reader, since nothing checked the CRC.
+func TestTruncatedAtTrailer(t *testing.T) {
+	var buf bytes.Buffer
+	enc := NewWriter(&buf)
+	if _, err := enc.Write(bytes.Repeat([]byte("hello gzip "), 1000)); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, cut := range []int{8, 7, 1, 9} {
+		r, err := NewReader(bytes.NewReader(buf.Bytes()[:buf.Len()-cut]))
+		if err != nil {
+			t.Fatalf("cut %d: %v", cut, err)
+		}
+		n, err := io.Copy(io.Discard, r)
+		if err != io.ErrUnexpectedEOF {
+			t.Errorf("cut %d bytes before the end: got %d bytes, err %v; want io.ErrUnexpectedEOF", cut, n, err)
+		}
+	}
+}
