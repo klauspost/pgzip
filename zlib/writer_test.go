@@ -12,7 +12,9 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestWriterEmpty(t *testing.T) {
@@ -431,5 +433,62 @@ func TestWriterRandomDataRoundTrip(t *testing.T) {
 	}
 	if !bytes.Equal(decompressed, payload) {
 		t.Fatalf("Random payload roundtrip mismatch")
+	}
+}
+
+type slowBlockWriter struct {
+	enteredBlock chan struct{}
+	once         sync.Once
+	writes       int
+}
+
+func (s *slowBlockWriter) Write(p []byte) (int, error) {
+	s.writes++
+	if s.writes >= 2 {
+		s.once.Do(func() {
+			close(s.enteredBlock)
+		})
+		time.Sleep(25 * time.Millisecond)
+	}
+	return len(p), nil
+}
+
+func TestWriterResetWaitsForOutputListener(t *testing.T) {
+	w1 := &slowBlockWriter{enteredBlock: make(chan struct{})}
+	w := NewWriter(w1)
+	if err := w.SetConcurrency(32*1024, 4); err != nil {
+		t.Fatalf("SetConcurrency failed: %v", err)
+	}
+
+	data1 := bytes.Repeat([]byte("first stream block data "), 4096) // 96 KiB -> dispatches 3 blocks
+	if _, err := w.Write(data1); err != nil {
+		t.Fatalf("Write 1 failed: %v", err)
+	}
+
+	// Wait until the output listener is actively writing the first block.
+	<-w1.enteredBlock
+
+	var buf2 bytes.Buffer
+	w.Reset(&buf2)
+
+	data2 := []byte("second stream after Reset without Close")
+	if _, err := w.Write(data2); err != nil {
+		t.Fatalf("Write 2 failed: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close 2 failed: %v", err)
+	}
+
+	r, err := stdzlib.NewReader(&buf2)
+	if err != nil {
+		t.Fatalf("stdzlib.NewReader failed: %v", err)
+	}
+	defer r.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll failed: %v", err)
+	}
+	if !bytes.Equal(out, data2) {
+		t.Fatalf("stream 2 corrupted after Reset: got %q, want %q", out, data2)
 	}
 }

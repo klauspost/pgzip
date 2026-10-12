@@ -5,6 +5,7 @@
 package zlib
 
 import (
+	"archive/tar"
 	"bytes"
 	stdzlib "compress/zlib"
 	"errors"
@@ -357,3 +358,87 @@ func TestReaderReadAfterClose(t *testing.T) {
 	}
 }
 
+func TestWriteToAfterReadDrainedBlock(t *testing.T) {
+	var buf bytes.Buffer
+	zw := NewWriter(&buf)
+	if _, err := zw.Write(bytes.Repeat([]byte("x"), 3000)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := NewReader(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(zr, make([]byte, 1000)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zr.Read(make([]byte, 4096)); err != nil && err != io.EOF {
+		t.Fatal(err)
+	}
+	if n, err := io.Copy(io.Discard, zr); err != nil || n != 0 {
+		t.Fatalf("io.Copy after drain: n=%d err=%v", n, err)
+	}
+}
+
+func TestWriteToAfterTarConsumedStream(t *testing.T) {
+	var tb bytes.Buffer
+	tw := tar.NewWriter(&tb)
+	if err := tw.WriteHeader(&tar.Header{Name: "a.txt", Mode: 0o644, Size: 1700}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(bytes.Repeat([]byte("x"), 1700)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	zw := NewWriter(&buf)
+	if _, err := zw.Write(tb.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	zr, err := NewReader(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(zr)
+	for {
+		if _, err := tr.Next(); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.Copy(io.Discard, tr); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := io.Copy(io.Discard, zr); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTruncatedAtTrailer(t *testing.T) {
+	var buf bytes.Buffer
+	enc := NewWriter(&buf)
+	if _, err := enc.Write(bytes.Repeat([]byte("hello zlib "), 1000)); err != nil {
+		t.Fatal(err)
+	}
+	if err := enc.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, cut := range []int{4, 3, 1, 5} {
+		r, err := NewReader(bytes.NewReader(buf.Bytes()[:buf.Len()-cut]))
+		if err != nil {
+			t.Fatalf("cut %d: %v", cut, err)
+		}
+		n, err := io.Copy(io.Discard, r)
+		if err != io.ErrUnexpectedEOF {
+			t.Errorf("cut %d bytes before the end: got %d bytes, err %v; want io.ErrUnexpectedEOF", cut, n, err)
+		}
+	}
+}

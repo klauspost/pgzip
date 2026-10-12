@@ -205,6 +205,8 @@ func (z *Writer) Reset(w io.Writer) {
 	if z.results != nil && !z.closed {
 		close(z.results)
 	}
+	z.wg.Wait()
+	z.wroteHeader = false
 	_ = z.SetConcurrency(defaultBlockSize, runtime.GOMAXPROCS(0))
 	z.init(w, z.level, z.dict)
 }
@@ -248,7 +250,9 @@ func (z *Writer) writeHeader() error {
 	}
 
 	// Start receiving data from compressors
+	z.wg.Add(1)
 	go func() {
+		defer z.wg.Done()
 		listen := z.results
 		var failed bool
 		for {
