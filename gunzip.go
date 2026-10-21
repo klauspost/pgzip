@@ -544,12 +544,12 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 	avail := z.current[z.roff:]
 	if len(avail) != 0 {
 		n, err := w.Write(avail)
-		if n != len(avail) {
-			return total, io.ErrShortWrite
-		}
 		total += int64(n)
 		if err != nil {
 			return total, err
+		}
+		if n != len(avail) {
+			return total, io.ErrShortWrite
 		}
 		z.blockPool <- z.current
 		z.current = nil
@@ -575,13 +575,10 @@ func (z *Reader) WriteTo(w io.Writer) (n int64, err error) {
 		// Write what we got (even empty final block).
 		if len(read.b) > 0 {
 			n, err := w.Write(read.b)
-			if n != len(read.b) {
-				if cap(read.b) > 0 {
-					z.blockPool <- read.b
-				}
-				return total, io.ErrShortWrite
-			}
 			total += int64(n)
+			if err == nil && n != len(read.b) {
+				err = io.ErrShortWrite
+			}
 			if err != nil {
 				if cap(read.b) > 0 {
 					z.blockPool <- read.b
