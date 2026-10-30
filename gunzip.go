@@ -238,6 +238,7 @@ func (z *Reader) readString() (string, error) {
 			needconv = true
 		}
 		if z.buf[i] == 0 {
+			z.digest.Write(z.buf[:i+1])
 			// GZIP (RFC 1952) specifies that strings are NUL-terminated ISO 8859-1 (Latin-1).
 			if needconv {
 				s := make([]rune, 0, i)
@@ -282,10 +283,12 @@ func (z *Reader) readHeader(save bool) error {
 		if err != nil {
 			return err
 		}
+		z.digest.Write(z.buf[:2])
 		data := make([]byte, n)
 		if _, err = io.ReadFull(z.r, data); err != nil {
 			return err
 		}
+		z.digest.Write(data)
 		if save {
 			z.Extra = data
 		}
