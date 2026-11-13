@@ -520,8 +520,13 @@ func (z *Writer) Close() error {
 	}
 	put4(z.buf[0:4], z.digest.Sum32())
 	put4(z.buf[4:8], uint32(z.size))
-	_, err := z.w.Write(z.buf[0:8])
+	n, err := z.w.Write(z.buf[0:8])
 	if err != nil {
+		z.pushError(err)
+		return err
+	}
+	if n != 8 {
+		err = fmt.Errorf("gzip: short write %d should be %d", n, 8)
 		z.pushError(err)
 		return err
 	}
