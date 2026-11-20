@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -491,4 +492,44 @@ func TestWriterResetWaitsForOutputListener(t *testing.T) {
 	if !bytes.Equal(out, data2) {
 		t.Fatalf("stream 2 corrupted after Reset: got %q, want %q", out, data2)
 	}
+}
+
+// failAfterHeader accepts the first write (the header) and fails all others.
+type failAfterHeader struct {
+	calls int
+	err   error
+}
+
+func (d *failAfterHeader) Write(p []byte) (int, error) {
+	d.calls++
+	if d.calls > 1 {
+		return 0, d.err
+	}
+	return len(p), nil
+}
+
+func TestWriterCloseAfterFlushErrorStopsOutput(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		sentinel := errors.New("destination unavailable")
+		w := NewWriter(&failAfterHeader{err: sentinel})
+		if _, err := w.Write(bytes.Repeat([]byte("payload"), 100)); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Flush(); !errors.Is(err, sentinel) {
+			t.Fatalf("Flush: %v", err)
+		}
+		if err := w.Close(); !errors.Is(err, sentinel) {
+			t.Fatalf("Close: %v", err)
+		}
+		done := make(chan struct{})
+		go func() { w.wg.Wait(); close(done) }()
+		// Reset releases a leaked output goroutine so the bubble can exit.
+		defer func() { w.Reset(io.Discard); <-done }()
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Error("output goroutine still running after Close")
+		}
+	})
 }
