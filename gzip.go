@@ -500,6 +500,13 @@ func (z *Writer) UncompressedSize() int {
 // io.Writer, but does not close the underlying io.Writer.
 func (z *Writer) Close() error {
 	if err := z.checkError(); err != nil {
+		if !z.closed {
+			// Release the output goroutine; otherwise it waits for results until Reset.
+			// Waiting ensures nothing touches z.w after Close returns.
+			z.closed = true
+			close(z.results)
+			z.wg.Wait()
+		}
 		return err
 	}
 	if z.closed {
