@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math/rand"
 	"os"
@@ -93,7 +94,7 @@ func TestRoundTrip(t *testing.T) {
 func TestLatin1(t *testing.T) {
 	latin1 := []byte{0xc4, 'u', 0xdf, 'e', 'r', 'u', 'n', 'g', 0}
 	utf8 := "Äußerung"
-	z := Reader{r: bufio.NewReader(bytes.NewReader(latin1))}
+	z := Reader{r: bufio.NewReader(bytes.NewReader(latin1)), digest: crc32.NewIEEE()}
 	s, err := z.readString()
 	if err != nil {
 		t.Fatalf("readString: %v", err)
