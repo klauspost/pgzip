@@ -236,14 +236,22 @@ func (z *Writer) writeHeader() error {
 		z.scratch[1] |= 1 << 5
 	}
 	z.scratch[1] += uint8(31 - binary.BigEndian.Uint16(z.scratch[:2])%31)
-	if _, err := z.w.Write(z.scratch[0:2]); err != nil {
+	if n, err := z.w.Write(z.scratch[0:2]); err != nil {
+		z.pushError(err)
+		return err
+	} else if n != 2 {
+		err = fmt.Errorf("zlib: short write %d should be %d", n, 2)
 		z.pushError(err)
 		return err
 	}
 	if z.dict != nil {
 		// The next four bytes are the Adler-32 checksum of the dictionary.
 		binary.BigEndian.PutUint32(z.scratch[:], adler32.Checksum(z.dict))
-		if _, err := z.w.Write(z.scratch[0:4]); err != nil {
+		if n, err := z.w.Write(z.scratch[0:4]); err != nil {
+			z.pushError(err)
+			return err
+		} else if n != 4 {
+			err = fmt.Errorf("zlib: short write %d should be %d", n, 4)
 			z.pushError(err)
 			return err
 		}
