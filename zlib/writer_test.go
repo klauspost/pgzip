@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"testing/synctest"
 	"time"
 )
 
