@@ -430,13 +430,6 @@ func (z *Writer) UncompressedSize() int {
 // io.Writer, but does not close the underlying io.Writer.
 func (z *Writer) Close() error {
 	if err := z.checkError(); err != nil {
-		if !z.closed {
-			// Release the output goroutine; otherwise it waits for results until Reset.
-			// Waiting ensures nothing touches z.w after Close returns.
-			z.closed = true
-			close(z.results)
-			z.wg.Wait()
-		}
 		return err
 	}
 	if z.closed {
@@ -455,8 +448,13 @@ func (z *Writer) Close() error {
 		return err
 	}
 	binary.BigEndian.PutUint32(z.scratch[:], z.digest.Sum32())
-	_, err := z.w.Write(z.scratch[0:4])
+	n, err := z.w.Write(z.scratch[0:4])
 	if err != nil {
+		z.pushError(err)
+		return err
+	}
+	if n != 4 {
+		err = fmt.Errorf("zlib: short write %d should be %d", n, 4)
 		z.pushError(err)
 		return err
 	}
