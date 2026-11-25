@@ -442,3 +442,34 @@ func TestTruncatedAtTrailer(t *testing.T) {
 		}
 	}
 }
+
+type partialErrorWriter struct{ err error }
+
+func (w partialErrorWriter) Write(p []byte) (int, error) {
+	return min(23, len(p)), w.err
+}
+
+var errDestinationUnavailable = errors.New("destination unavailable")
+
+func TestReaderWriteToReportsPartialWriteThenError(t *testing.T) {
+	var src bytes.Buffer
+	w := NewWriter(&src)
+	if _, err := w.Write([]byte("payload for a partial destination write")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewReader(&src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	n, err := io.Copy(partialErrorWriter{errDestinationUnavailable}, r)
+	if n != 23 {
+		t.Errorf("io.Copy wrote %d bytes, want 23 accepted bytes", n)
+	}
+	if !errors.Is(err, errDestinationUnavailable) {
+		t.Errorf("io.Copy error = %v, want %v", err, errDestinationUnavailable)
+	}
+}
