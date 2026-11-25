@@ -492,4 +492,3 @@ func TestWriterResetWaitsForOutputListener(t *testing.T) {
 		t.Fatalf("stream 2 corrupted after Reset: got %q, want %q", out, data2)
 	}
 }
-
